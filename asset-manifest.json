@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/bb-supply-chain-management/static/css/main.3d6f3de8.css",
+    "main.js": "/bb-supply-chain-management/static/js/main.bdc194f7.js",
+    "static/js/453.c1eac7ab.chunk.js": "/bb-supply-chain-management/static/js/453.c1eac7ab.chunk.js",
+    "index.html": "/bb-supply-chain-management/index.html",
+    "main.3d6f3de8.css.map": "/bb-supply-chain-management/static/css/main.3d6f3de8.css.map",
+    "main.bdc194f7.js.map": "/bb-supply-chain-management/static/js/main.bdc194f7.js.map",
+    "453.c1eac7ab.chunk.js.map": "/bb-supply-chain-management/static/js/453.c1eac7ab.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.3d6f3de8.css",
+    "static/js/main.bdc194f7.js"
+  ]
+}
