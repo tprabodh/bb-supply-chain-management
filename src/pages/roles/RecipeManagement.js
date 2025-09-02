@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createRecipe, subscribeToRecipes, updateRecipe, deleteRecipe } from '../../services/recipeService';
+import { syncVendorsWithRecipe } from '../../services/vendorSyncService';
 
 const RecipeManagement = () => {
   const [recipes, setRecipes] = useState([]);
@@ -47,13 +48,15 @@ const RecipeManagement = () => {
     setLoading(true);
     setError(null);
     try {
-      await createRecipe({
+      const recipeData = {
         name: newRecipeName,
         mrp: parseFloat(newMrp),
         sellingPrice: parseFloat(newSellingPrice),
         description: newDescription,
         ingredients: newIngredients.map(ing => ({ ...ing, quantity: parseFloat(ing.quantity) }))
-      });
+      };
+      await createRecipe(recipeData);
+      await syncVendorsWithRecipe(null, recipeData, 'update'); // Pass type as 'update' for new recipe
       setNewRecipeName('');
       setNewIngredients([{ name: '', quantity: '', unit: '' }]);
       setNewMrp('');
@@ -76,13 +79,15 @@ const RecipeManagement = () => {
     setLoading(true);
     setError(null);
     try {
-      await updateRecipe(editingRecipe.id, {
+      const updatedRecipeData = {
         name: editingRecipe.name,
         mrp: parseFloat(editingRecipe.mrp),
         sellingPrice: parseFloat(editingRecipe.sellingPrice),
         description: editingRecipe.description,
         ingredients: editingRecipe.ingredients.map(ing => ({ ...ing, quantity: parseFloat(ing.quantity) }))
-      });
+      };
+      await updateRecipe(editingRecipe.id, updatedRecipeData);
+      await syncVendorsWithRecipe(editingRecipe.id, updatedRecipeData, 'update'); // Pass type as 'update' for updated recipe
       setEditingRecipe(null);
     } catch (err) {
       setError('Failed to update recipe.');
@@ -96,7 +101,11 @@ const RecipeManagement = () => {
     setLoading(true);
     setError(null);
     try {
+      const recipeToDelete = recipes.find(r => r.id === id);
       await deleteRecipe(id);
+      if (recipeToDelete) {
+        await syncVendorsWithRecipe(id, recipeToDelete, 'delete'); // Pass type as 'delete'
+      }
     } catch (err) {
       setError('Failed to delete recipe.');
       console.error('Error deleting recipe:', err);

@@ -117,13 +117,24 @@ export const updateProfile = async (id, updatedData) => {
 
 export const syncVendorsToSalesExecutives = async () => {
   try {
-    const qTeamLead = query(collection(db, 'profiles'), where('subrole', '==', 'Team Lead-1'));
-    const querySnapshotTeamLead = await getDocs(qTeamLead);
-    if (querySnapshotTeamLead.empty) {
-      console.error('Team Lead-1 not found. Cannot migrate vendors.');
+    const teamLeadsQuery = query(collection(db, 'profiles'), where('role', '==', 'Team Lead'));
+    const teamLeadsSnapshot = await getDocs(teamLeadsQuery);
+
+    if (teamLeadsSnapshot.empty) {
+      console.warn('No Team Leads found. Sales Executives cannot be assigned.');
       return;
     }
-    const teamLeadId = querySnapshotTeamLead.docs[0].id;
+
+    const teamLeads = teamLeadsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Sort Team Leads by the numerical part of their subrole
+    teamLeads.sort((a, b) => {
+      const numA = parseInt(a.subrole.split('-').pop());
+      const numB = parseInt(b.subrole.split('-').pop());
+      return numA - numB;
+    });
+
+    let currentTeamLeadIndex = 0;
+    let salesExecutivesAssignedToCurrentTL = 0;
 
     const vendorsCollectionRef = collection(db, 'vendors');
     const vendorsSnapshot = await getDocs(vendorsCollectionRef);
@@ -134,6 +145,27 @@ export const syncVendorsToSalesExecutives = async () => {
 
       const qProfile = query(collection(db, 'profiles'), where('email', '==', vendorEmail));
       const profileSnapshot = await getDocs(qProfile);
+
+      // Find the next available Team Lead
+      while (currentTeamLeadIndex < teamLeads.length) {
+        const teamLeadId = teamLeads[currentTeamLeadIndex].id;
+        const salesExecutivesUnderThisTLQuery = query(collection(db, 'profiles'), where('reportsTo', '==', teamLeadId), where('role', '==', 'Sales Executive'));
+        const salesExecutivesUnderThisTLSnapshot = await getDocs(salesExecutivesUnderThisTLQuery);
+        salesExecutivesAssignedToCurrentTL = salesExecutivesUnderThisTLSnapshot.docs.length;
+
+        if (salesExecutivesAssignedToCurrentTL < 25) {
+          break; // Found an available Team Lead
+        } else {
+          currentTeamLeadIndex++; // Move to the next Team Lead
+        }
+      }
+
+      if (currentTeamLeadIndex >= teamLeads.length) {
+        console.warn('All Team Leads are full. Cannot assign more Sales Executives.');
+        break; // No available Team Leads
+      }
+
+      const assignedTeamLeadId = teamLeads[currentTeamLeadIndex].id;
 
       if (profileSnapshot.empty) {
         // Create new profile
@@ -149,17 +181,18 @@ export const syncVendorsToSalesExecutives = async () => {
           aadharNumber: vendorData.aadharCardNumber || 'N/A',
           role: 'Sales Executive',
           subrole: `Sales Executive-${nextSalesExecutiveNumber}`, 
-          reportsTo: teamLeadId,
+          reportsTo: assignedTeamLeadId,
           // No password or Firebase Auth user creation for these profiles
         };
         // Directly add to profiles collection without Firebase Auth user creation
         await addDoc(collection(db, 'profiles'), newProfileData);
-        console.log(`Created new Sales Executive profile for ${vendorEmail}`);
+        console.log(`Created new Sales Executive profile for ${vendorEmail} under ${teamLeads[currentTeamLeadIndex].subrole}`);
       } else {
         const existingProfile = profileSnapshot.docs[0];
-        await updateProfile(existingProfile.id, { reportsTo: teamLeadId });
-        console.log(`Updated existing Sales Executive profile for ${vendorEmail}`);
+        await updateProfile(existingProfile.id, { reportsTo: assignedTeamLeadId });
+        console.log(`Updated existing Sales Executive profile for ${vendorEmail} under ${teamLeads[currentTeamLeadIndex].subrole}`);
       }
+      salesExecutivesAssignedToCurrentTL++; // Increment count for the current Team Lead
     }
     console.log('Vendor migration to Sales Executives complete.');
   } catch (e) {
