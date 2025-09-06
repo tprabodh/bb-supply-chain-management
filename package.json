@@ -2,7 +2,7 @@
   "name": "supply-chain-management-app",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://bikebiryani.in/bb-supply-chain-management",
+  "homepage": "https://www.bikebiryani.in",
   "dependencies": {
     "@tailwindcss/cli": "^4.1.12",
     "@testing-library/dom": "^10.4.1",
