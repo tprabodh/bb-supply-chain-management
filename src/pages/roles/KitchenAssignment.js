@@ -35,7 +35,11 @@ const KitchenAssignment = () => {
                   if (existingItem) {
                       existingItem.quantity += item.quantity;
                   } else {
-                      acc.push({ ...item });
+                      acc.push({ 
+                        ...item,
+                        forecastId: target.forecastId,
+                        forecastWeek: target.forecastWeek
+                      });
                   }
               });
               return acc;
@@ -139,6 +143,10 @@ const KitchenAssignment = () => {
       return;
     }
 
+    const firstTargetWithForecast = aggregatedTargets.find(t => t.forecastId);
+    const forecastId = firstTargetWithForecast ? firstTargetWithForecast.forecastId : null;
+    const forecastWeek = firstTargetWithForecast ? firstTargetWithForecast.forecastWeek : null;
+
     kitchenManagers.forEach(km => {
       const itemsForThisKitchenManager = [];
       const fromPreparedStockForThisManager = [];
@@ -170,8 +178,8 @@ const KitchenAssignment = () => {
           items: itemsForThisKitchenManager,
           fromPreparedStock: fromPreparedStockForThisManager,
           status: 'Pending Dispersal',
-          forecastId: aggregatedTargets[0].forecastId, 
-          forecastWeek: aggregatedTargets[0].forecastWeek,
+          forecastId: forecastId, 
+          forecastWeek: forecastWeek,
         });
       }
     });

@@ -67,6 +67,8 @@ const DailyTargetInput = ({ teamLead, weeklyForecast, recipes }) => {
                 teamLeadId: teamLead.id,
                 date: today,
                 items,
+                forecastId: weeklyForecast.id,
+                forecastWeek: weeklyForecast.forecastWeek,
             };
 
             await createDailyTarget(targetData);

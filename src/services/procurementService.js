@@ -100,29 +100,26 @@ export const subscribeToStock = (callback) => {
 export const addStock = async (ingredients) => {
     try {
         await runTransaction(db, async (transaction) => {
-            const stockUpdates = [];
-            for (const ingredient of ingredients) {
-                if (!ingredient || typeof ingredient.name !== 'string' || ingredient.name.trim() === '') {
-                    console.error('Invalid ingredient object or name:', ingredient);
+            const stockRefs = ingredients.map(ing => {
+                if (!ing || typeof ing.name !== 'string' || ing.name.trim() === '') {
+                    console.error('Invalid ingredient object or name:', ing);
                     throw new Error('Invalid ingredient data provided for stock addition.');
                 }
-                const stockRef = doc(db, 'stock', String(ingredient.name));
-                const stockDoc = await transaction.get(stockRef);
+                return doc(db, 'stock', String(ing.name));
+            });
+            const stockDocs = await Promise.all(stockRefs.map(ref => transaction.get(ref)));
+
+            ingredients.forEach((ingredient, index) => {
+                const stockDoc = stockDocs[index];
+                const stockRef = stockRefs[index];
+
                 if (stockDoc.exists()) {
                     const newQuantity = stockDoc.data().quantity + ingredient.quantity;
-                    stockUpdates.push({ ref: stockRef, quantity: newQuantity });
+                    transaction.update(stockRef, { quantity: newQuantity });
                 } else {
-                    stockUpdates.push({ ref: stockRef, quantity: ingredient.quantity, unit: ingredient.unit, isNew: true });
+                    transaction.set(stockRef, { quantity: ingredient.quantity, unit: ingredient.unit });
                 }
-            }
-
-            for (const update of stockUpdates) {
-                if (update.isNew) {
-                    transaction.set(update.ref, { quantity: update.quantity, unit: update.unit });
-                } else {
-                    transaction.update(update.ref, { quantity: update.quantity });
-                }
-            }
+            });
         });
     } catch (error) {
         console.error('Error adding stock:', error);
@@ -133,28 +130,29 @@ export const addStock = async (ingredients) => {
 export const deductStock = async (ingredients) => {
     try {
         await runTransaction(db, async (transaction) => {
-            const stockUpdates = [];
-            for (const ingredient of ingredients) {
-                if (!ingredient || typeof ingredient.name !== 'string' || ingredient.name.trim() === '') {
-                    console.error('Invalid ingredient object or name:', ingredient);
+            const stockRefs = ingredients.map(ing => {
+                if (!ing || typeof ing.name !== 'string' || ing.name.trim() === '') {
+                    console.error('Invalid ingredient object or name:', ing);
                     throw new Error('Invalid ingredient data provided for stock deduction.');
                 }
-                const stockRef = doc(db, 'stock', String(ingredient.name));
-                const stockDoc = await transaction.get(stockRef);
+                return doc(db, 'stock', String(ing.name));
+            });
+            const stockDocs = await Promise.all(stockRefs.map(ref => transaction.get(ref)));
+
+            ingredients.forEach((ingredient, index) => {
+                const stockDoc = stockDocs[index];
+                const stockRef = stockRefs[index];
+
                 if (stockDoc.exists()) {
                     const newQuantity = stockDoc.data().quantity - ingredient.quantity;
                     if (newQuantity < 0) {
                         throw new Error(`Not enough stock for ${ingredient.name}`);
                     }
-                    stockUpdates.push({ ref: stockRef, quantity: newQuantity });
+                    transaction.update(stockRef, { quantity: newQuantity });
                 } else {
                     throw new Error(`Ingredient ${ingredient.name} not found in stock`);
                 }
-            }
-
-            for (const update of stockUpdates) {
-                transaction.update(update.ref, { quantity: update.quantity });
-            }
+            });
         });
     } catch (error) {
         console.error('Error deducting stock:', error);

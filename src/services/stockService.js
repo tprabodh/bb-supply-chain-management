@@ -18,6 +18,8 @@ export const reportSpoilage = async (spoilageData) => {
   const { itemType, itemId, quantity, stockManagerId } = spoilageData;
   const stockCollectionName = itemType === 'ingredient' ? 'stock' : 'preparedStock';
   const itemRef = doc(db, stockCollectionName, itemId);
+  const spoilageLogCollection = collection(db, 'spoilageLog');
+  const newSpoilageLogRef = doc(spoilageLogCollection);
 
   await runTransaction(db, async (transaction) => {
     const itemDoc = await transaction.get(itemRef);
@@ -35,8 +37,7 @@ export const reportSpoilage = async (spoilageData) => {
 
     const itemName = itemType === 'ingredient' ? itemId : itemDoc.data().name;
 
-    const spoilageLogCollection = collection(db, 'spoilageLog');
-    await addDoc(spoilageLogCollection, {
+    transaction.set(newSpoilageLogRef, {
       itemId,
       itemName,
       itemType,

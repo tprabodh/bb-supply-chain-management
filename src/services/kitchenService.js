@@ -132,25 +132,25 @@ export const subscribeToKitchenStock = (kitchenId, callback) => {
 export const updateKitchenStock = async (kitchenId, ingredients) => {
     try {
         await runTransaction(db, async (transaction) => {
-            const stockUpdates = [];
-            for (const ingredient of ingredients) {
-                const stockRef = doc(db, 'kitchenStock', `${kitchenId}_${ingredient.name}`);
-                const stockDoc = await transaction.get(stockRef);
+            const stockRefs = ingredients.map(ing => doc(db, 'kitchenStock', `${kitchenId}_${ing.name}`));
+            const stockDocs = await Promise.all(stockRefs.map(ref => transaction.get(ref)));
+
+            ingredients.forEach((ingredient, index) => {
+                const stockDoc = stockDocs[index];
+                const stockRef = stockRefs[index];
+
                 if (stockDoc.exists()) {
                     const newQuantity = stockDoc.data().quantity + ingredient.quantity;
-                    stockUpdates.push({ ref: stockRef, quantity: newQuantity });
+                    transaction.update(stockRef, { quantity: newQuantity });
                 } else {
-                    stockUpdates.push({ ref: stockRef, kitchenId, ingredientName: ingredient.name, quantity: ingredient.quantity, unit: ingredient.unit, isNew: true });
+                    transaction.set(stockRef, { 
+                        kitchenId, 
+                        ingredientName: ingredient.name, 
+                        quantity: ingredient.quantity, 
+                        unit: ingredient.unit 
+                    });
                 }
-            }
-
-            for (const update of stockUpdates) {
-                if (update.isNew) {
-                    transaction.set(update.ref, { kitchenId: update.kitchenId, ingredientName: update.ingredientName, quantity: update.quantity, unit: update.unit });
-                } else {
-                    transaction.update(update.ref, { quantity: update.quantity });
-                }
-            }
+            });
         });
     } catch (error) {
         console.error('Error updating kitchen stock:', error);
@@ -161,9 +161,13 @@ export const updateKitchenStock = async (kitchenId, ingredients) => {
 export const deductKitchenStock = async (kitchenId, ingredients) => {
     try {
         await runTransaction(db, async (transaction) => {
-            for (const ingredient of ingredients) {
-                const stockRef = doc(db, 'kitchenStock', `${kitchenId}_${ingredient.ingredientName}`);
-                const stockDoc = await transaction.get(stockRef);
+            const stockRefs = ingredients.map(ing => doc(db, 'kitchenStock', `${kitchenId}_${ing.ingredientName}`));
+            const stockDocs = await Promise.all(stockRefs.map(ref => transaction.get(ref)));
+
+            ingredients.forEach((ingredient, index) => {
+                const stockDoc = stockDocs[index];
+                const stockRef = stockRefs[index];
+
                 if (stockDoc.exists()) {
                     const newQuantity = stockDoc.data().quantity - ingredient.quantity;
                     if (newQuantity < 0) {
@@ -173,10 +177,49 @@ export const deductKitchenStock = async (kitchenId, ingredients) => {
                 } else {
                     throw new Error(`Ingredient ${ingredient.ingredientName} not found in kitchen stock`);
                 }
-            }
+            });
         });
     } catch (error) {
         console.error('Error deducting kitchen stock:', error);
         throw error;
     }
+};
+
+export const confirmIngredientReceipt = async (assignmentId, kitchenId) => {
+    await runTransaction(db, async (transaction) => {
+        const assignmentRef = doc(db, 'cookingAssignments', assignmentId);
+        const assignmentDoc = await transaction.get(assignmentRef);
+
+        if (!assignmentDoc.exists()) {
+            throw new Error("Assignment not found!");
+        }
+
+        const assignment = assignmentDoc.data();
+        const ingredientsToUpdate = [
+            ...assignment.items,
+            ...(assignment.fromPreparedStock || [])
+        ];
+
+        const stockRefs = ingredientsToUpdate.map(ing => doc(db, 'kitchenStock', `${kitchenId}_${ing.name}`));
+        const stockDocs = await Promise.all(stockRefs.map(ref => transaction.get(ref)));
+
+        ingredientsToUpdate.forEach((ingredient, index) => {
+            const stockDoc = stockDocs[index];
+            const stockRef = stockRefs[index];
+
+            if (stockDoc.exists()) {
+                const newQuantity = stockDoc.data().quantity + ingredient.quantity;
+                transaction.update(stockRef, { quantity: newQuantity });
+            } else {
+                transaction.set(stockRef, { 
+                    kitchenId, 
+                    ingredientName: ingredient.name, 
+                    quantity: ingredient.quantity, 
+                    unit: ingredient.unit 
+                });
+            }
+        });
+
+        transaction.update(assignmentRef, { status: 'Ingredients Received' });
+    });
 };

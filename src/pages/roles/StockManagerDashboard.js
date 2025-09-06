@@ -26,6 +26,7 @@ const StockManagerDashboard = () => {
   const [spoilageQuantities, setSpoilageQuantities] = useState({});
   const [spoilageHistory, setSpoilageHistory] = useState([]);
   const [historyVisible, setHistoryVisible] = useState(false);
+  const [purchasedRequests, setPurchasedRequests] = useState([]);
 
   useEffect(() => {
     if (!user) {
@@ -72,61 +73,80 @@ const StockManagerDashboard = () => {
       setSpoilageHistory(history);
     });
 
+    const qPurchased = query(collection(db, 'procurementRequests'), where('status', '==', 'Purchased'));
+    const unsubscribePurchased = onSnapshot(qPurchased, (snapshot) => {
+      const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPurchasedRequests(requests);
+    });
+
     return () => {
       unsubscribeAssignments();
       unsubscribeStockBack();
       unsubscribePreparedStock();
       unsubscribeSpoilageHistory();
+      unsubscribePurchased();
     };
   }, [user]);
 
   const handleDisperse = async (task) => {
     try {
+      // Get recipes outside of the transaction
+      const recipePromises = task.items.map(item => 
+        getDocs(query(collection(db, 'recipes'), where('name', '==', item.name)))
+      );
+      const recipeSnapshots = await Promise.all(recipePromises);
+
+      const recipes = recipeSnapshots.map((snapshot, index) => {
+        if (snapshot.empty) {
+          throw new Error(`Recipe for ${task.items[index].name} not found.`);
+        }
+        return snapshot.docs[0].data();
+      });
+
       await runTransaction(db, async (transaction) => {
         const taskRef = doc(db, 'cookingAssignments', task.id);
+
+        // 1. READS
+        const preparedStockRefs = (task.fromPreparedStock || []).map(item => doc(db, 'preparedStock', item.name));
+        const preparedStockDocs = await Promise.all(preparedStockRefs.map(ref => transaction.get(ref)));
+
+        const allIngredients = [];
+        recipes.forEach((recipe, index) => {
+            recipe.ingredients.forEach(ingredient => {
+                allIngredients.push({
+                    name: ingredient.name,
+                    quantity: ingredient.quantity * task.items[index].quantity
+                });
+            });
+        });
         
-        if (task.fromPreparedStock) {
-          for (const item of task.fromPreparedStock) {
-            const preparedStockRef = doc(db, 'preparedStock', item.name);
-            const preparedStockDoc = await transaction.get(preparedStockRef);
-            if (preparedStockDoc.exists()) {
-              const newQuantity = preparedStockDoc.data().quantity - item.quantity;
-              if (newQuantity < 0) {
+        const stockRefs = allIngredients.map(ing => doc(db, 'stock', ing.name));
+        const stockDocs = await Promise.all(stockRefs.map(ref => transaction.get(ref)));
+
+        // 2. WRITES
+        (task.fromPreparedStock || []).forEach((item, index) => {
+            const preparedStockDoc = preparedStockDocs[index];
+            if (!preparedStockDoc.exists()) {
+                throw new Error(`Prepared stock for ${item.name} not found`);
+            }
+            const newQuantity = preparedStockDoc.data().quantity - item.quantity;
+            if (newQuantity < 0) {
                 throw new Error(`Not enough prepared stock for ${item.name}`);
-              }
-              transaction.update(preparedStockRef, { quantity: newQuantity });
-            } else {
-              throw new Error(`Prepared stock for ${item.name} not found`);
             }
-          }
-        }
+            transaction.update(preparedStockRefs[index], { quantity: newQuantity });
+        });
 
-        for (const item of task.items) {
-          const recipeQuery = query(collection(db, 'recipes'), where('name', '==', item.name));
-          const recipeSnapshot = await getDocs(recipeQuery);
-
-          if (recipeSnapshot.empty) {
-            throw new Error(`Recipe for ${item.name} not found. Cannot disperse ingredients.`);
-          }
-
-          const recipe = recipeSnapshot.docs[0].data();
-          const ingredients = recipe.ingredients;
-
-          for (const ingredient of ingredients) {
-            const stockRef = doc(db, 'stock', ingredient.name);
-            const stockDoc = await transaction.get(stockRef);
-
-            if (stockDoc.exists()) {
-              const newQuantity = stockDoc.data().quantity - (ingredient.quantity * item.quantity);
-              if (newQuantity < 0) {
+        allIngredients.forEach((ingredient, index) => {
+            const stockDoc = stockDocs[index];
+            if (!stockDoc.exists()) {
+                throw new Error(`Raw stock for ${ingredient.name} not found`);
+            }
+            const newQuantity = stockDoc.data().quantity - ingredient.quantity;
+            if (newQuantity < 0) {
                 throw new Error(`Not enough raw stock for ${ingredient.name}`);
-              }
-              transaction.update(stockRef, { quantity: newQuantity });
-            } else {
-              throw new Error(`Raw stock for ${ingredient.name} not found`);
             }
-          }
-        }
+            transaction.update(stockRefs[index], { quantity: newQuantity });
+        });
 
         transaction.update(taskRef, { status: 'Dispersed' });
       });
@@ -214,6 +234,45 @@ const StockManagerDashboard = () => {
     }
   };
 
+  const handleConfirmReceipt = async (request) => {
+    try {
+      await runTransaction(db, async (transaction) => {
+        const requestRef = doc(db, 'procurementRequests', request.id);
+        
+        // 1. Read all stock documents first
+        const stockDocs = await Promise.all(
+          request.ingredients.map(ingredient => {
+            const stockRef = doc(db, 'stock', ingredient.name);
+            return transaction.get(stockRef);
+          })
+        );
+
+        // 2. Perform all writes
+        request.ingredients.forEach((ingredient, index) => {
+          const stockDoc = stockDocs[index];
+          const stockRef = doc(db, 'stock', ingredient.name);
+
+          if (stockDoc.exists()) {
+            const newQuantity = (stockDoc.data().quantity || 0) + ingredient.quantity;
+            transaction.update(stockRef, { quantity: newQuantity });
+          } else {
+            transaction.set(stockRef, {
+              quantity: ingredient.quantity,
+              unit: ingredient.unit,
+            });
+          }
+        });
+
+        transaction.update(requestRef, { status: 'Received' });
+      });
+
+      toast.success('Stock updated successfully!');
+    } catch (error) {
+      toast.error(`Error confirming receipt: ${error.message}`);
+      console.error('Error confirming receipt:', error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f56703] to-[#f59e03] p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
@@ -248,6 +307,38 @@ const StockManagerDashboard = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <button onClick={() => handleDisperse(task)} className="px-4 py-2 font-semibold text-white bg-[#f56703] rounded-lg shadow-md hover:bg-[#d95702] transform hover:-translate-y-0.5 transition-all duration-300">Disperse</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg">
+              <h3 className="text-2xl font-bold text-gray-800 mb-6">Purchased Ingredients Ready for Stocking</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Procurement ID</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ingredients</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {purchasedRequests.map(req => (
+                      <tr key={req.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{req.id}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <ul className="list-disc list-inside space-y-1">
+                            {req.ingredients.map((item, index) => (
+                              <li key={index}>{item.quantity} {item.unit} of {item.name}</li>
+                            ))}
+                          </ul>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button onClick={() => handleConfirmReceipt(req)} className="px-4 py-2 font-semibold text-white bg-blue-600 rounded-lg shadow-md hover:bg-blue-700 transform hover:-translate-y-0.5 transition-all duration-300">Confirm Receipt</button>
                         </td>
                       </tr>
                     ))}
@@ -305,7 +396,7 @@ const StockManagerDashboard = () => {
                       <tr key={item.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.name}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.quantity}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(item.returnedAt.seconds * 1000)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.returnedAt ? formatDate(item.returnedAt.seconds * 1000) : 'N/A'}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex items-center space-x-2">
                             <input
@@ -357,7 +448,7 @@ const StockManagerDashboard = () => {
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.itemName}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.itemType}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.quantity}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(item.reportedAt.seconds * 1000)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.reportedAt ? formatDate(item.reportedAt.seconds * 1000) : 'N/A'}</td>
                         </tr>
                       ))}
                     </tbody>

@@ -25,9 +25,12 @@ export const subscribeToLogisticsInventory = (callback) => {
 export const updateLogisticsInventory = async (items, operation) => {
     try {
         await runTransaction(db, async (transaction) => {
-            for (const item of items) {
-                const itemRef = doc(db, 'logisticsInventory', item.recipeId);
-                const itemDoc = await transaction.get(itemRef);
+            const itemRefs = items.map(item => doc(db, 'logisticsInventory', item.recipeId));
+            const itemDocs = await Promise.all(itemRefs.map(ref => transaction.get(ref)));
+
+            items.forEach((item, index) => {
+                const itemDoc = itemDocs[index];
+                const itemRef = itemRefs[index];
                 const currentQuantity = itemDoc.exists() ? itemDoc.data().quantity : 0;
                 const newQuantity = operation === 'add' 
                     ? currentQuantity + (item.cookedQuantity || item.quantity)
@@ -38,7 +41,7 @@ export const updateLogisticsInventory = async (items, operation) => {
                 }
 
                 transaction.set(itemRef, { quantity: newQuantity });
-            }
+            });
         });
     } catch (error) {
         console.error('Error updating logistics inventory:', error);

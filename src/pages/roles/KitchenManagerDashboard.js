@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { subscribeToAssignmentsByKitchen, updateCookingAssignmentStatus } from '../../services/kitchenService';
+import { subscribeToAssignmentsByKitchen, updateCookingAssignmentStatus, confirmIngredientReceipt } from '../../services/kitchenService';
 import Loader from '../../components/Loader';
 import CookedFood from '../../components/CookedFood';
 import KitchenManagerInventory from '../../components/KitchenManagerInventory';
@@ -29,8 +29,8 @@ const KitchenManagerDashboard = () => {
 
   const handleConfirmReceipt = async (assignmentId) => {
     try {
-      await updateCookingAssignmentStatus(assignmentId, 'Ingredients Received');
-      toast.success('Ingredient receipt confirmed!');
+      await confirmIngredientReceipt(assignmentId, user.id);
+      toast.success('Ingredient receipt confirmed and stock updated!');
     } catch (error) {
       toast.error('Error confirming receipt. Please try again.');
       console.error('Error confirming receipt:', error);
