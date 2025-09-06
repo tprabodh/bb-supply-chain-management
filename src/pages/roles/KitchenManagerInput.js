@@ -4,6 +4,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { subscribeToAssignmentsByKitchen, updateCookedQuantities, deductKitchenStock } from '../../services/kitchenService';
 import Loader from '../../components/Loader';
 import { toast } from 'react-toastify';
+import { getDocs, query, collection, where } from 'firebase/firestore';
+import { db } from '../../firebase';
 
 const KitchenManagerInput = () => {
   const { user } = useAuth();
@@ -52,10 +54,28 @@ const KitchenManagerInput = () => {
             ...item,
             cookedQuantity: cookedQuantities[assignmentId][item.name]
         }));
+
+        // Get all recipes for the items in the assignment
+        const recipePromises = assignment.items.map(item => getDocs(query(collection(db, 'recipes'), where('name', '==', item.name))));
+        const recipeSnapshots = await Promise.all(recipePromises);
+
+        const allIngredients = [];
+        recipeSnapshots.forEach((snapshot, index) => {
+            if (snapshot.empty) {
+                throw new Error(`Recipe for ${assignment.items[index].name} not found.`);
+            }
+            const recipe = snapshot.docs[0].data();
+            recipe.ingredients.forEach(ingredient => {
+                allIngredients.push({
+                    ingredientName: ingredient.name,
+                    quantity: ingredient.quantity * updatedItems[index].cookedQuantity,
+                });
+            });
+        });
+
         await updateCookedQuantities(assignmentId, updatedItems);
-        await deductKitchenStock(user.id, updatedItems);
+        await deductKitchenStock(user.id, allIngredients);
         toast.success('Cooked quantities submitted successfully!');
-        // No need to call fetchAssignments() here, as the real-time listener will update
     } catch (error) {
         setError('Error submitting cooked quantities.');
         console.error(error);

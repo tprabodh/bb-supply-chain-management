@@ -1,5 +1,5 @@
 import { db, auth } from '../firebase';
-import { collection, addDoc, getDocs, query, where, doc, updateDoc, runTransaction, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, doc, updateDoc, runTransaction, onSnapshot, getDoc } from 'firebase/firestore';
 
 const cookingAssignmentsCollection = collection(db, 'cookingAssignments');
 const kitchenStockCollection = collection(db, 'kitchenStock');
@@ -186,24 +186,46 @@ export const deductKitchenStock = async (kitchenId, ingredients) => {
 };
 
 export const confirmIngredientReceipt = async (assignmentId, kitchenId) => {
-    await runTransaction(db, async (transaction) => {
-        const assignmentRef = doc(db, 'cookingAssignments', assignmentId);
-        const assignmentDoc = await transaction.get(assignmentRef);
+    const assignmentRef = doc(db, 'cookingAssignments', assignmentId);
+    const assignmentDoc = await getDoc(assignmentRef);
 
-        if (!assignmentDoc.exists()) {
-            throw new Error("Assignment not found!");
+    if (!assignmentDoc.exists()) {
+        throw new Error("Assignment not found!");
+    }
+
+    const assignment = assignmentDoc.data();
+
+    // Get all recipes for the items in the assignment
+    const recipePromises = assignment.items.map(item => getDocs(query(collection(db, 'recipes'), where('name', '==', item.name))));
+    const recipeSnapshots = await Promise.all(recipePromises);
+
+    const allIngredients = [];
+    recipeSnapshots.forEach((snapshot, index) => {
+        if (snapshot.empty) {
+            throw new Error(`Recipe for ${assignment.items[index].name} not found.`);
         }
+        const recipe = snapshot.docs[0].data();
+        recipe.ingredients.forEach(ingredient => {
+            allIngredients.push({
+                name: ingredient.name,
+                quantity: ingredient.quantity * assignment.items[index].quantity,
+                unit: ingredient.unit
+            });
+        });
+    });
 
-        const assignment = assignmentDoc.data();
-        const ingredientsToUpdate = [
-            ...assignment.items,
-            ...(assignment.fromPreparedStock || [])
-        ];
+    // Add items from prepared stock to the list of ingredients to update
+    if (assignment.fromPreparedStock) {
+        assignment.fromPreparedStock.forEach(item => {
+            allIngredients.push(item);
+        });
+    }
 
-        const stockRefs = ingredientsToUpdate.map(ing => doc(db, 'kitchenStock', `${kitchenId}_${ing.name}`));
+    await runTransaction(db, async (transaction) => {
+        const stockRefs = allIngredients.map(ing => doc(db, 'kitchenStock', `${kitchenId}_${ing.name}`));
         const stockDocs = await Promise.all(stockRefs.map(ref => transaction.get(ref)));
 
-        ingredientsToUpdate.forEach((ingredient, index) => {
+        allIngredients.forEach((ingredient, index) => {
             const stockDoc = stockDocs[index];
             const stockRef = stockRefs[index];
 

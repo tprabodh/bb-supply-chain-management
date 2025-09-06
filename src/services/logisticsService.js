@@ -104,3 +104,30 @@ export const updateDistributionStatus = async (distributionId, newStatus) => {
         throw error;
     }
 };
+
+export const collectCookedFood = async (task) => {
+    try {
+        await runTransaction(db, async (transaction) => {
+            const taskRef = doc(db, 'cookingAssignments', task.id);
+            
+            // 1. READS
+            const itemRefs = task.items.map(item => doc(db, 'logisticsInventory', item.recipeId));
+            const itemDocs = await Promise.all(itemRefs.map(ref => transaction.get(ref)));
+
+            // 2. WRITES
+            transaction.update(taskRef, { status: 'Collected by Logistics' });
+
+            task.items.forEach((item, index) => {
+                const itemDoc = itemDocs[index];
+                const itemRef = itemRefs[index];
+                const currentQuantity = itemDoc.exists() ? itemDoc.data().quantity : 0;
+                const newQuantity = currentQuantity + (item.cookedQuantity || item.quantity);
+                
+                transaction.set(itemRef, { quantity: newQuantity });
+            });
+        });
+    } catch (error) {
+        console.error('Error collecting cooked food:', error);
+        throw error;
+    }
+};
