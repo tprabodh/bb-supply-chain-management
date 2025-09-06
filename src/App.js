@@ -38,7 +38,7 @@ import KitchenAssignment from './pages/roles/KitchenAssignment';
 
 function App() {
   return (
-    <Router basename="/bb-supply-chain-management">
+    <Router>
       <ToastContainer position="top-right" autoClose={5000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover />
       <Routes>
         <Route path="/login" element={<Login />} />
