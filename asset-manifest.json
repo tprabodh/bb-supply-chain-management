@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/bb-supply-chain-management/static/css/main.1b1c05ad.css",
-    "main.js": "/bb-supply-chain-management/static/js/main.213f8bfc.js",
-    "static/js/453.c1eac7ab.chunk.js": "/bb-supply-chain-management/static/js/453.c1eac7ab.chunk.js",
-    "index.html": "/bb-supply-chain-management/index.html",
-    "main.1b1c05ad.css.map": "/bb-supply-chain-management/static/css/main.1b1c05ad.css.map",
-    "main.213f8bfc.js.map": "/bb-supply-chain-management/static/js/main.213f8bfc.js.map",
-    "453.c1eac7ab.chunk.js.map": "/bb-supply-chain-management/static/js/453.c1eac7ab.chunk.js.map"
+    "main.css": "/static/css/main.1b1c05ad.css",
+    "main.js": "/static/js/main.f999c7af.js",
+    "static/js/453.c1eac7ab.chunk.js": "/static/js/453.c1eac7ab.chunk.js",
+    "index.html": "/index.html",
+    "main.1b1c05ad.css.map": "/static/css/main.1b1c05ad.css.map",
+    "main.f999c7af.js.map": "/static/js/main.f999c7af.js.map",
+    "453.c1eac7ab.chunk.js.map": "/static/js/453.c1eac7ab.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.1b1c05ad.css",
-    "static/js/main.213f8bfc.js"
+    "static/js/main.f999c7af.js"
   ]
 }
