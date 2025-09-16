@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { collection, onSnapshot, query, where, doc, updateDoc, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { getProfilesByIds } from '../../services/profileService';
-import { subscribeToCompletedAssignments } from '../../services/kitchenService';
+import { subscribeToAssignmentsByStatus } from '../../services/kitchenService';
 import Loader from '../../components/Loader';
 import { toast } from 'react-toastify';
 import { collectCookedFood } from '../../services/logisticsService';
@@ -39,13 +39,13 @@ const LogisticsManagerDashboard = () => {
       setLoading(false);
     });
 
-    const unsubscribeAssignments = subscribeToCompletedAssignments((assignments) => {
-      setCompletedAssignments(assignments);
+    const unsubscribeCookedFood = subscribeToAssignmentsByStatus('Ready for Logistics Collection', (assignments) => {
+      setCompletedAssignments(assignments); // Still use setCompletedAssignments for now
     });
 
     return () => {
       unsubscribe();
-      unsubscribeAssignments();
+      unsubscribeCookedFood();
     };
   }, [user]);
 
@@ -103,29 +103,31 @@ const LogisticsManagerDashboard = () => {
         {!loading && (
           <div className="space-y-8">
             <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg">
-              <h3 className="text-2xl font-bold text-gray-800 mb-6">Ready for Collection</h3>
+              <h3 className="text-2xl font-bold text-gray-800 mb-6">Cooked Food Ready for Collection (from Stock Manager)</h3>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assignment ID</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kitchen</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {completedAssignments.map(task => (
-                      <tr key={task.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{task.kitchenName}</td>
+                    {completedAssignments.map(assignment => (
+                      <tr key={assignment.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{assignment.id}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{assignment.kitchenName}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           <ul className="list-disc list-inside space-y-1">
-                            {task.items.map((item, index) => (
-                              <li key={index}>{item.cookedQuantity || item.quantity} {item.unit} of {item.name}</li>
+                            {assignment.items.map((item, index) => (
+                              <li key={index}>{item.cookedQuantity || item.quantity} of {item.name}</li>
                             ))}
                           </ul>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <button onClick={() => handleCollectFood(task)} className="px-4 py-2 font-semibold text-white bg-green-600 rounded-lg shadow-md hover:bg-green-700 transform hover:-translate-y-0.5 transition-all duration-300">Collect Food</button>
+                          <button onClick={() => handleCollectFood(assignment)} className="px-4 py-2 font-semibold text-white bg-green-600 rounded-lg shadow-md hover:bg-green-700 transform hover:-translate-y-0.5 transition-all duration-300">Collect Food</button>
                         </td>
                       </tr>
                     ))}

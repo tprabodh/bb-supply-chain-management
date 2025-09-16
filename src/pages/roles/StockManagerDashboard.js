@@ -4,9 +4,14 @@ import { collection, onSnapshot, query, where, doc, updateDoc, runTransaction, g
 import { db } from '../../firebase';
 import { getProfilesByIds } from '../../services/profileService';
 import { reportSpoilage } from '../../services/stockService';
+import { subscribeToPurchasedBulkBuyOrders, confirmBulkBuyOrderReceipt } from '../../services/bulkBuyOrderService';
 import Loader from '../../components/Loader';
 import { toast } from 'react-toastify';
 import StockManagerStock from '../../components/StockManagerStock';
+import { subscribeToStockManagerForecasts, updateForecastStatus, updateMultipleForecastStatuses } from '../../services/forecastService';
+import { subscribeToDailyTargetsByDate } from '../../services/dailyTargetService';
+import { subscribeToProfilesByRole } from '../../services/profileService';
+import StockManagerKitchenAssignment from '../../components/StockManagerKitchenAssignment';
 
 const formatDate = (date) => {
   const d = new Date(date);
@@ -20,13 +25,19 @@ const StockManagerDashboard = () => {
   const { user } = useAuth();
   const [pendingDispersalAssignments, setPendingDispersalAssignments] = useState([]);
   const [stockBackRequests, setStockBackRequests] = useState([]);
-  const [preparedStock, setPreparedStock] = useState([]);
+  
   const [teamLeadProfiles, setTeamLeadProfiles] = useState({});
   const [loading, setLoading] = useState(true);
   const [spoilageQuantities, setSpoilageQuantities] = useState({});
   const [spoilageHistory, setSpoilageHistory] = useState([]);
   const [historyVisible, setHistoryVisible] = useState(false);
   const [purchasedRequests, setPurchasedRequests] = useState([]);
+  const [bulkBuyOrders, setBulkBuyOrders] = useState([]);
+  const [pendingForecasts, setPendingForecasts] = useState([]);
+  const [dailyTargets, setDailyTargets] = useState([]);
+  const [pendingCookedFoodCollection, setPendingCookedFoodCollection] = useState([]);
+  const [kitchenManagers, setKitchenManagers] = useState([]);
+  const [preparedStockData, setPreparedStockData] = useState([]); // Renamed to avoid conflict with preparedStock state in KitchenAssignment
 
   useEffect(() => {
     if (!user) {
@@ -61,11 +72,7 @@ const StockManagerDashboard = () => {
       console.error('Error subscribing to stock back requests:', err);
     });
 
-    const qPreparedStock = query(collection(db, 'preparedStock'));
-    const unsubscribePreparedStock = onSnapshot(qPreparedStock, (snapshot) => {
-      const stock = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setPreparedStock(stock);
-    });
+    
 
     const qSpoilageHistory = query(collection(db, 'spoilageLog'), where('stockManagerId', '==', user.uid));
     const unsubscribeSpoilageHistory = onSnapshot(qSpoilageHistory, (snapshot) => {
@@ -79,12 +86,59 @@ const StockManagerDashboard = () => {
       setPurchasedRequests(requests);
     });
 
+    const unsubscribeBulkBuyOrders = subscribeToPurchasedBulkBuyOrders(setBulkBuyOrders, (err) => {
+      toast.error('Error subscribing to bulk buy orders.');
+      console.error('Error subscribing to bulk buy orders:', err);
+    });
+
+    const today = formatDate(new Date()); // Define today here
+
+    const unsubscribeForecasts = subscribeToStockManagerForecasts(async (fetchedForecasts) => {
+      setPendingForecasts(fetchedForecasts);
+    }, (err) => {
+      toast.error('Error subscribing to pending forecasts for Stock Manager.');
+      console.error('Error subscribing to pending forecasts for Stock Manager:', err);
+    });
+
+    const unsubscribeDailyTargets = subscribeToDailyTargetsByDate(today, setDailyTargets, (err) => {
+      toast.error('Error subscribing to daily targets.');
+      console.error('Error subscribing to daily targets:', err);
+    });
+
+    const unsubscribeKitchenManagers = subscribeToProfilesByRole('Kitchen Manager', setKitchenManagers, (err) => {
+      toast.error('Error subscribing to kitchen managers.');
+      console.error('Error subscribing to kitchen managers:', err);
+    });
+
+    const qPreparedStock = query(collection(db, 'preparedStock'));
+    const unsubscribePreparedStockData = onSnapshot(qPreparedStock, (snapshot) => {
+      const stock = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPreparedStockData(stock);
+    }, (err) => {
+      toast.error('Error subscribing to prepared stock.');
+      console.error('Error subscribing to prepared stock:', err);
+    });
+
+    const qPendingCookedFood = query(collection(db, 'cookingAssignments'), where('status', '==', 'Pending Stock Manager Collection'));
+    const unsubscribePendingCookedFood = onSnapshot(qPendingCookedFood, (snapshot) => {
+      const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPendingCookedFoodCollection(assignments);
+    }, (err) => {
+      toast.error('Error subscribing to pending cooked food collection.');
+      console.error('Error subscribing to pending cooked food collection:', err);
+    });
+
     return () => {
       unsubscribeAssignments();
       unsubscribeStockBack();
-      unsubscribePreparedStock();
       unsubscribeSpoilageHistory();
       unsubscribePurchased();
+      unsubscribeBulkBuyOrders();
+      unsubscribeForecasts();
+      unsubscribeDailyTargets();
+      unsubscribeKitchenManagers();
+      unsubscribePreparedStockData();
+      unsubscribePendingCookedFood();
     };
   }, [user]);
 
@@ -273,6 +327,46 @@ const StockManagerDashboard = () => {
     }
   };
 
+  const handleConfirmBulkBuyReceipt = async (order) => {
+    try {
+      await confirmBulkBuyOrderReceipt(order);
+      toast.success('Bulk buy order received and stock updated!');
+    } catch (error) {
+      toast.error(`Error confirming bulk buy receipt: ${error.message}`);
+      console.error('Error confirming bulk buy receipt:', error);
+    }
+  };
+
+  const handleApproveForecast = async (individualForecasts) => {
+    try {
+      await updateMultipleForecastStatuses(individualForecasts, 'Pending Finance Approval');
+      toast.success('Forecasts approved and sent to Finance!');
+    } catch (error) {
+      toast.error(`Error approving forecasts: ${error.message}`);
+      console.error('Error approving forecasts:', error);
+    }
+  };
+
+  const handleRejectForecast = async (individualForecasts) => {
+    try {
+      await updateMultipleForecastStatuses(individualForecasts, 'Rejected by Stock Manager');
+      toast.info('Forecasts rejected.');
+    } catch (error) {
+      toast.error(`Error rejecting forecasts: ${error.message}`);
+      console.error('Error rejecting forecasts:', error);
+    }
+  };
+
+  const handleConfirmCookedFoodCollection = async (assignmentId) => {
+    try {
+      await updateDoc(doc(db, 'cookingAssignments', assignmentId), { status: 'Ready for Logistics Collection' });
+      toast.success('Cooked food marked as ready for logistics collection!');
+    } catch (error) {
+      toast.error(`Error confirming cooked food collection: ${error.message}`);
+      console.error('Error confirming cooked food collection:', error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f56703] to-[#f59e03] p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
@@ -281,6 +375,77 @@ const StockManagerDashboard = () => {
         {loading && <div className="flex justify-center items-center h-64"><Loader /></div>}
         {!loading && (
           <div className="space-y-8">
+            <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg">
+              <h3 className="text-2xl font-bold text-gray-800 mb-6">Purchased Bulk Buy Orders</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order ID</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchased On</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ingredients</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {bulkBuyOrders.map(order => (
+                      <tr key={order.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{order.id}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(order.purchasedAt.seconds * 1000).toLocaleDateString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <ul className="list-disc list-inside space-y-1">
+                            {order.ingredients.map((item, index) => (
+                              <li key={index}>{item.quantity} {item.unit} of {item.name}</li>
+                            ))}
+                          </ul>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button onClick={() => handleConfirmBulkBuyReceipt(order)} className="px-4 py-2 font-semibold text-white bg-green-600 rounded-lg shadow-md hover:bg-green-700 transform hover:-translate-y-0.5 transition-all duration-300">Confirm Receipt</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg">
+              <h3 className="text-2xl font-bold text-gray-800 mb-6">Pending Forecasts for Approval</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Zonal Head EmpCode</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Zonal Head Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Forecast Week</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aggregated Items</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {pendingForecasts.map(forecast => (
+                      <tr key={forecast.zonalHeadEmpCode} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{forecast.zonalHeadEmpCode}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{forecast.zonalHeadName}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{forecast.forecastWeek}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <ul className="list-disc list-inside space-y-1">
+                            {Object.values(forecast.items).map((item, index) => (
+                              <li key={index}>{item.quantity} of {item.name}</li>
+                            ))}
+                          </ul>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button onClick={() => handleApproveForecast(forecast.individualForecasts)} className="px-4 py-2 font-semibold text-white bg-green-600 rounded-lg shadow-md hover:bg-green-700 transform hover:-translate-y-0.5 transition-all duration-300 mr-2">Approve</button>
+                          <button onClick={() => handleRejectForecast(forecast.individualForecasts)} className="px-4 py-2 font-semibold text-white bg-red-600 rounded-lg shadow-md hover:bg-red-700 transform hover:-translate-y-0.5 transition-all duration-300">Reject</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg">
               <h3 className="text-2xl font-bold text-gray-800 mb-6">Ingredient Dispersal Tasks</h3>
               <div className="overflow-x-auto">
@@ -392,7 +557,7 @@ const StockManagerDashboard = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {preparedStock.map(item => (
+                    {preparedStockData.map(item => (
                       <tr key={item.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.name}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.quantity}</td>
@@ -420,6 +585,46 @@ const StockManagerDashboard = () => {
                 </table>
               </div>
             </div>
+
+            <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg">
+              <h3 className="text-2xl font-bold text-gray-800 mb-6">Cooked Food Ready for Collection</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assignment ID</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kitchen</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {pendingCookedFoodCollection.map(assignment => (
+                      <tr key={assignment.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{assignment.id}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{assignment.kitchenName}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <ul className="list-disc list-inside space-y-1">
+                            {assignment.items.map((item, index) => (
+                              <li key={index}>{item.quantity} of {item.name}</li>
+                            ))}
+                          </ul>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button onClick={() => handleConfirmCookedFoodCollection(assignment.id)} className="px-4 py-2 font-semibold text-white bg-green-600 rounded-lg shadow-md hover:bg-green-700 transform hover:-translate-y-0.5 transition-all duration-300">Confirm Collection</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <StockManagerKitchenAssignment
+              dailyTargets={dailyTargets}
+              kitchenManagers={kitchenManagers}
+              preparedStock={preparedStockData}
+            />
 
             <StockManagerStock />
 

@@ -35,210 +35,123 @@ This project is a comprehensive Supply Chain Management application built with R
 ### 6. Standardized Date Format
 - All dates displayed throughout the application now adhere to the `dd-mm-yyyy` format for consistency.
 
-## Project Structure
+### 7. Centralized Sales Executive & Vendor Management
+- The registration and management of Sales Executives (formerly handled by the separate Vendor App) is now centralized within the SCM app. Admins can create Sales Executive profiles, which automatically creates corresponding documents in both the `profiles` and `vendors` collections.
+- The `empCode` is now also stored in the `vendors` collection.
+- The old "Sync Vendors" feature has been removed.
 
-The project is organized as follows:
+### 8. Vendor App Updates
+- The Vendor App login has been updated to use `empCode` and password, aligning with the SCM app.
+- The Vendor App's home screen has been restructured to prioritize stock management, with other sections like "Blocked Orders" and "Generate Invoice" accessible from the home screen.
+- The "Shift Stock" feature in the Vendor App now uses `empCode` to identify the recipient vendor.
 
-- **/public**: Contains the main HTML file and static assets like images and icons.
-- **/src**: Contains the main source code for the application.
-  - **/api**: (Not yet implemented) Intended for API-related logic.
-  - **/assets**: Contains static assets like images and icons.
-  - **/components**: Contains reusable React components used throughout the application (e.g., Modals, Loaders).
-  - **/constants**: (Not yet implemented) Intended for constant values used throughout the application.
-  - **/contexts**: Contains React Context providers for managing global state (e.g., `AuthContext`).
-  - **/hooks**: (Not yet implemented) Intended for custom React hooks.
-  - **/pages**: Contains the main pages of the application, organized by role.
-  - **/routes**: (Not yet implemented) Intended for route definitions.
-  - **/services**: Contains services for interacting with backend systems like Firebase (e.g., `forecastService`, `kitchenService`).
-  - **/styles**: (Not yet implemented) Intended for global styles.
-  - **/utils**: (Not yet implemented) Intended for utility functions.
+### 9. Enhanced Invoice Generation (Vendor App)
+- A new feature for invoicing non-registered customers has been added.
+- A new `non-registered-customers` collection has been created to store the details of these customers for future use.
+- An autocomplete feature has been added to the customer name field to suggest previously entered non-registered customers.
+- The app now generates a PDF invoice and prepares it for sending via email.
 
-## Implemented Functionality
+### 10. Advanced Recipe & Ingredient Management
+- A new **Ingredient Management** system has been created for Admins to register master ingredients with a name, unit of measurement, and cost per unit.
+- The **Recipe Management** feature has been enhanced:
+  - The ingredient name field now provides autocomplete suggestions from the master ingredients list.
+  - The ingredient's unit is autofilled upon selection.
+  - The cost for each ingredient is automatically calculated based on the quantity and the master cost, and is stored with the recipe.
+  - Recipes now include a field for an **Image URL**.
+  - A multi-tiered **Incentive** system has been added to each recipe, allowing for different incentive percentages based on sales volume.
 
-### 1. Core Features
-- **User Authentication & Authorization:** Secure login/logout for all roles. Access to pages and features is strictly restricted based on the user's assigned role.
-- **Profile Management (Admin):** Admins can create, view, and edit employee profiles.
-- **Organization Chart (Admin):** A visual representation of the company hierarchy.
-- **Recipe Management (Admin):** Admins can define recipes for food items, which are used for automatic ingredient calculation.
+### 11. Latest Bug Fixes and Enhancements
 
-### 2. Forecasting & Approval
-- **Zonal Head:** Can create and submit weekly sales forecasts for their respective team leads.
-- **Finance & Accounts:** Can review pending weekly forecasts, modify quantities if necessary, and approve or reject them.
+#### Vendor App
+- **Home Screen Stability:** Implemented a robust daily stock history snapshot mechanism using `WidgetsBindingObserver`. The `_performDailyCheck` function now reliably saves the previous day's stock data to `vendor_stock_history` and resets daily counters. The `StreamBuilder` in `home_screen.dart` was refactored to correctly handle all connection and data states (waiting, error, no data/document not found) and prevent infinite loading.
+- **Sale Records Page:**
+  - Added display for user's salary.
+  - Implemented a new weekly incentive table at the top of the screen.
+  - Calculates "incentivized units" based on item type (jar = 25 units, sachet = 1 unit).
+  - Calculates tiered incentives based on the "pickle" item's selling price and incentive tiers.
+  - The daily sales records list remains, with updated daily incentive calculations.
 
-### 3. Daily Operations
-- **Daily Target Setting (Zonal Head):** Zonal Heads set daily sales targets for each of their team leads, based on the approved weekly forecast.
-- **Automated Procurement Requests:** Upon weekly forecast approval, a procurement request with a calculated list of required ingredients is automatically generated.
-- **Procurement (Procurement Manager):** Views pending procurement requests and marks them as "Purchased".
-- **Stock Management (Stock Manager):** Views purchased items, confirms their receipt into a dedicated `stock` collection, and disperses ingredients to kitchens based on daily cooking assignments.
-- **Daily Kitchen Assignments (Admin):** Admins assign daily cooking tasks to different kitchens based on the aggregated daily targets.
-- **Kitchen Operations (Kitchen Manager):** Can view their assigned daily cooking tasks, confirm receipt of ingredients, and submit the final cooked quantities.
-- **Logistics & Distribution (Logistics Manager & Team Lead):** The logistics manager collects cooked food from kitchens, and team leads confirm receipt of deliveries.
+#### Supply Chain Management App Enhancements:
+- **Admin Business Details:** Implemented a new "Business Details" section in the Admin Dashboard for managing core business information (name, GSTIN, phone, email, address, FSSAI).
+- **Bulk Buy Order Workflow:** Developed a comprehensive new flow for bulk ingredient procurement:
+    - **City Operations Head (COH):** Can now create and submit bulk buy orders with specific ingredients and quantities, including real-time cost calculation.
+    - **Finance:** Gains a new section to review, edit quantities, and approve/reject COH-submitted bulk buy orders.
+    - **Procurement Manager:** Can view approved bulk buy orders and mark them as "Purchased."
+    - **Stock Manager:** Can confirm receipt of purchased bulk buy orders, which automatically updates the central stock inventory.
+    - **Bug Fix:** Corrected an issue in `confirmBulkBuyOrderReceipt` to properly aggregate quantities for duplicate ingredients in a single order, preventing data overwrites.
+- **Forecasting Flow Overhaul:** Initiated a major restructuring of the forecasting process:
+    - **Sales Executive Forecasts:** Sales Executives now input weekly forecasts by providing daily quantity breakdowns for each item. The total weekly forecast is automatically calculated from these daily entries.
+    - **Team Lead Forecast View:** Team Leads can now view the aggregated weekly forecasts submitted by their Sales Executives.
+    - **Zonal Head Forecast View:** Zonal Heads can view aggregated weekly forecasts from their Team Leads, with an expandable option to see the Sales Executive daily breakdown.
+    - **Stock Manager Forecast Approval:** Stock Managers now receive aggregated forecasts from Zonal Heads for approval or rejection. They cannot modify quantities.
+    - **Finance Forecast Acceptance:** Finance receives forecasts after Stock Manager approval for final acceptance.
+    - **Procurement Trigger:** Procurement requests are now triggered upon Finance's final acceptance of the forecast.
+- **Sales Executive (SE) Dashboard Enhancements:**
+  - **Forecast Editability:** SEs can now edit and update their submitted forecasts as long as the Stock Manager has not yet accepted them (statuses: `Draft`, `Rejected by Stock Manager`, `Pending Stock Manager Approval`).
+  - **Streamlined Submission:** The "Save" button has been renamed to "Update". The "Submit" button has been removed; updating a draft or rejected forecast automatically sets its status to `Pending Stock Manager Approval`.
+  - **Consistent Date Display:** All displayed forecast dates now consistently adhere to the `dd-mm-yyyy` format.
+- **Stock Manager (SM) Dashboard Enhancements:**
+  - **Aggregated Forecast Approval:** SMs now receive aggregated forecasts from Zonal Heads for approval or rejection, displaying Zonal Head `empCode` and name. Approval/rejection applies to all individual forecasts under that Zonal Head.
+  - **Kitchen Assignment:** SMs are now responsible for assigning daily cooking tasks to different kitchens based on aggregated daily targets.
+  - **Cooked Food Collection:** SMs confirm collection of cooked food from kitchens (status: `Pending Stock Manager Collection`) and mark it `Ready for Logistics Collection`.
+- **Zonal Head (ZH) Dashboard Enhancements:**
+  - **Daily Goal Setting:** Zonal Heads can now set daily goals for each Team Lead, per item, based on aggregated Sales Executive forecasts for the *current day*. The section heading clearly indicates the current date.
+- **Logistics Manager (LM) Dashboard Enhancements:**
+  - **Cooked Food Collection Workflow:** LMs now collect cooked food with status `Ready for Logistics Collection` (from the Stock Manager), integrating into the new cooked food handling workflow.
 
-## Project Flow
+ - #### Logistics Manager (LM)                                                              │
+ │     66 - - **Cooked Food Collection:** **(UPDATED)** LM now collects cooked food with status      │
+ │        `Ready for Logistics Collection` (from Stock Manager).                                     │
+ │     67 - - **Distribution:** Distributes food to Team Leads based on daily targets.               │
+ │     68 - - **Stock Back Requests:** Views stock back requests from Team Leads, confirms pickup,   │
+ │        and marks them "Ready for Restock".  
 
-This application orchestrates the entire supply chain, from weekly sales forecasting to daily execution and final delivery. The workflow is divided into several key stages:
+#### Firestore Schema Updates:
+- **`dailyTargets` collection:** Documents now include `forecastId` and `forecastWeek` fields.
+- **`cookingAssignments` collection:** New statuses added: `Pending Stock Manager Collection` and `Ready for Logistics Collection`.
 
-### 1. Recipe Management (Admin)
-- The Admin defines the ingredients and quantities required for each food item, along with the item's MRP, selling price, description, and a picture. This serves as the foundation for all procurement and cooking calculations.
-
-### 2. Weekly Forecasting and Approval (Zonal Head & Finance)
-- A Zonal Head submits a single, locked-in sales forecast for the upcoming week (Monday to Sunday), detailing the total number of food units each Team Lead is projected to sell.
-- The weekly forecast is sent to the Finance & Accounts department for review and approval.
-
-### 3. Procurement (Procurement Manager & Stock Manager)
-- Upon weekly forecast approval, the system automatically calculates the ingredients needed. It first checks the `preparedStock` for any ready-made items and then checks the `stock` for raw ingredients. 
-- A procurement request is generated only for the ingredients that are actually needed after accounting for both prepared and raw stock. The Procurement Manager buys the ingredients.
-- The Stock Manager confirms receipt of the ingredients, and the quantities are added to the central `stock` collection.
-
-### 4. Daily Target Setting (Zonal Head)
-- Every day, the Zonal Head sets a daily sales target for each of their Team Leads. This target is a portion of the approved weekly forecast.
-- The system tracks the remaining weekly forecast to ensure that the sum of daily targets does not exceed the weekly forecast.
-
-### 5. Daily Kitchen Operations (Admin, Stock & Kitchen Managers)
-- The system aggregates the daily targets from all Team Leads to determine the total amount of each food item to be cooked for that day.
-- The Admin assigns these daily cooking tasks to various kitchens.
-- The Stock Manager dispatches the required ingredients to the individual kitchens, and the quantities are deducted from the `stock` collection.
-- The Kitchen Manager confirms receipt of the ingredients and, after cooking, reports the actual quantity of food produced.
-
-### 6. Daily Logistics and Distribution (Logistics Manager & Team Lead)
-- The Logistics Manager collects the cooked food from all kitchens.
-- They distribute the food to the various Team Leads based on the daily targets.
-- Each Team Lead confirms receipt of the food, completing the daily cycle.
-
-### 7. Stock Back (Team Lead, Logistics Manager & Stock Manager)
-- At the end of the day, the Team Lead initiates a "stock back" request for any unsold food items from their sales executives.
-- The Logistics Manager views these requests, confirms the pickup of the items, and marks them as "Ready for Restock".
-- The Stock Manager then sees the items ready for restock, confirms receipt, and the system automatically updates the central `stock` collection with the returned ingredients based on the item's recipe.
-
-### 8. Spoilage Reporting (Stock Manager)
-- The Stock Manager can report spoiled or expired ingredients and prepared food items directly from their dashboard.
-- For each item in the "Current Stock" and "Prepared Stock" tables, there is an input field to enter the quantity of spoiled items and a "Report" button.
-- When spoilage is reported, the quantity is deducted from the corresponding stock (`stock` or `preparedStock` collection).
-- A new document is created in the `spoilageLog` collection to record the details of the spoilage event, including the item name, quantity, the stock manager who reported it, and the timestamp.
-
-## Firestore Database Schema
-
-This document outlines the structure of the shared Firestore database used by the Customer App, Vendor App, and the Supply Chain Management App.
-
-### Core Collections
-
-#### `profiles`
-- **Purpose:** Manages user profiles for the `supply-chain-management-app`, including their roles and permissions.
-- **Fields:**
-    - `uid`: (string) The user's unique ID from Firebase Authentication.
-    - `email`: (string) The user's email.
-    - `role`: (string) The primary role of the user (e.g., "Finance", "Logistics Manager").
-    - `subrole`: (string) A more specific sub-role, if applicable.
-    - `reportsTo`: (string) The document ID of the user's manager in the `profiles` collection.
-    - `empCode`: (string) A unique hierarchical employee code.
-
-#### `recipes`
-- **Purpose:** Stores the recipes for food items, detailing the required ingredients and quantities.
-
-#### `stock`
-- **Purpose:** Stores the current inventory of each ingredient.
-- **Document ID:** The name of the ingredient.
-- **Fields:**
-    - `quantity`: (number) The current quantity of the ingredient in stock.
-    - `unit`: (string) The unit of measurement for the ingredient (e.g., "kg", "liters").
-
-#### `preparedStock`
-- **Purpose:** Stores the current inventory of fully cooked/prepared items that have been returned via the stock back flow.
-- **Document ID:** The name of the prepared item.
-- **Fields:**
-    - `quantity`: (number) The current quantity of the prepared item in stock.
-    - `returnedAt`: (Timestamp) The date the item was returned to stock.
-
-#### `spoilageLog`
-- **Purpose:** Logs all spoilage events for ingredients and prepared food.
-- **Fields:**
-    - `itemId`: (string) The ID of the spoiled item.
-    - `itemName`: (string) The name of the spoiled item.
-    - `itemType`: (string) The type of item ('ingredient' or 'preparedStock').
-    - `quantity`: (number) The quantity that was spoiled.
-    - `stockManagerId`: (string) The ID of the stock manager who reported the spoilage.
-    - `reportedAt`: (Timestamp) The timestamp of when the spoilage was reported.
-
-### Transactional Collections
-
-#### `forecasts`
-- **Purpose:** Stores the weekly sales forecasts submitted by Zonal Heads.
-- **Fields:**
-    - `zonalHeadId`: (string) The document ID of the Zonal Head who submitted the forecast.
-    - `teamLeadId`: (string) The document ID of the Team Lead for whom the forecast is being submitted.
-    - `forecastWeek`: (string) The start date of the week for which the forecast is being submitted (in `dd-mm-yyyy` format).
-    - `items`: (array) A list of items in the forecast, including item name, recipe ID, and quantity.
-    - `status`: (string) The status of the forecast (e.g., "Pending", "Approved", "Rejected").
-    - `createdAt`: (Timestamp) The time the forecast was submitted.
-
-#### `dailyTargets`
-- **Purpose:** Stores the daily sales targets set by Zonal Heads for their Team Leads.
-- **Document ID:** `${teamLeadId}_${date}` (e.g., "someTeamLeadId_21-08-2025")
-- **Fields:**
-    - `zonalHeadId`: (string) The document ID of the Zonal Head.
-    - `teamLeadId`: (string) The document ID of the Team Lead.
-    - `date`: (string) The date for which the target is being set (in `dd-mm-yyyy` format).
-    - `items`: (array) A list of items in the target, including item name, recipe ID, and quantity.
-
-#### `procurementRequests`
-- **Purpose:** Manages requests for procuring new ingredients based on approved weekly forecasts.
-
-#### `cookingAssignments`
-- **Purpose:** Manages the assignment of daily cooking tasks to different kitchens.
-- **Fields:**
-    - `date`: (string) The date for which the assignment is being made (in `dd-mm-yyyy` format).
-    - `kitchenId`: (string) The document ID of the kitchen.
-    - `kitchenName`: (string) The name of the kitchen.
-    - `kitchenManagerId`: (string) The document ID of the Kitchen Manager.
-    - `items`: (array) A list of items to be cooked, including item name, recipe ID, and quantity.
-    - `status`: (string) The status of the assignment (e.g., "Pending Dispersal", "Dispersed", "Ingredients Received", "Completed").
-    - `completedAt`: (Timestamp) The time the assignment was completed.
-    - `forecastId`: (string) The ID of the weekly forecast this assignment is derived from.
-    - `forecastWeek`: (string) The start date of the forecast week this assignment is derived from.
-
-#### `distributions`
-- **Purpose:** Tracks the distribution of cooked food to sales teams.
-
-#### `logisticsInventory`
-- **Purpose:** Manages the inventory of the logistics team.
-- **Document ID:** The name of the ingredient.
-- **Fields:**
-    - `quantity`: (number) The current quantity of the ingredient in logistics inventory.
-    - `unit`: (string) The unit of measurement for the ingredient.
-
-## New Features Implemented
-
-This section outlines the key new functionalities added to the application:
-
-### 1. Enhanced Team Lead Dashboard
-- **Sales Data Overview:** Team Leads can now view the sales performance of all Sales Executives under them. This data is presented in separate, collapsible tables for each Sales Executive, with filtering options for various time periods (Today, This Week, Last Week, This Month, Last Month, Till Now).
-
-### 2. Streamlined Zonal Head Dashboard
-- **Weekly Forecast Submission:** Zonal Heads now submit a single, locked-in weekly forecast for all their Team Leads for the upcoming week. Once submitted, this forecast cannot be changed.
-- **Daily Target Setting:** Zonal Heads can set daily sales targets for each Team Lead, based on the approved weekly forecast.
-- The system tracks the remaining weekly forecast to ensure that the sum of daily targets does not exceed the weekly forecast.
-- **Forecast vs. Actual Sales Analysis:** A new section provides a detailed comparison of weekly forecasted sales against actual sales for each Team Lead and item, helping Zonal Heads assess forecast accuracy.
-
-### 3. Comprehensive City Operations Head Dashboard
-- **Aggregated Sales Data:** City Operations Heads can view aggregated sales data for all Zonal Heads and Team Leads under their purview, presented in collapsible tables.
-- **Kitchen Manager Metrics:** A new section displays key performance indicators for Kitchen Managers, including assigned cooking quantities, actual cooked quantities, and completion times.
-- **Business Insights:** Visual insights are provided through charts, including:
-    - **Sales vs. Forecast:** A bar chart comparing overall forecasted sales with actual sales.
-    - **Top Selling Items:** A pie chart highlighting the top 5 best-selling food items.
-    - **Sales Trends:** A line chart illustrating sales performance over time.
-- **Operational Overviews:** Displays pending forecasts, active procurements, and ongoing kitchen assignments, similar to the Admin Dashboard.
-
-### 4. Advanced Stock Manager Dashboard
-- **Centralized Stock Management:** The system now uses a dedicated `stock` collection for real-time inventory tracking of all ingredients.
-- **Streamlined Receipt & Dispersal:** When stock is received, it's added to the `stock` collection. When ingredients are dispersed to kitchens, they are deducted from this central stock.
-- **Cumulative Procurement List:** The dashboard shows a cumulative list of all ingredients to be purchased based on pending procurement requests.
-
-### 5. Enhanced Kitchen Manager Dashboard
-- **Cooked Food History:** Kitchen Managers can view a history of all food cooked, filtered by various time periods.
-- **Real-time Kitchen Inventory:** A new section displays the current inventory of ingredients within the kitchen, allowing Kitchen Managers to report wastage.
-
-### 6. HR Dashboard Enhancements
-- **Subordinate Sales Data:** HR users can select any Zonal Head, Team Lead, or Sales Executive under their City Operations Head and view their detailed sales data, complete with time-based filtering.
+- ### 7. Firestore Database Schema                                                         │
+ │     71 -                                                                                          │
+ │     72 - This section outlines the structure of the shared Firestore database used by the         │
+ │        Customer App, Vendor App, and the Supply Chain Management App.                             │
+ │     73 -                                                                                          │
+ │     74 - #### Core Collections                                                                    │
+ │     75 -                                                                                          │
+ │     76 - - **`profiles`**: Manages user profiles, roles, permissions, `empCode`, and `reportsTo`  │
+ │        .                                                                                          │
+ │     77 - - **`recipes`**: Stores food item recipes, including `name`, `mrp`, `sellingPrice`,      │
+ │        `description`, `imageUrl`, `ingredients` (with `name`, `quantity`, `unit`, `cost`), and    │
+ │        `incentives`.                                                                              │
+ │     78 - - **`ingredients`**: Master list of ingredients with `name`, `unit`, `costPerUnit`.      │
+ │     79 - - **`non-registered-customers`**: Stores details of non-registered customers.            │
+ │     80 - - **`vendors`**: Manages vendor-specific information, including `empCode`.               │
+ │     81 - - **`stock`**: Current inventory of each ingredient (`quantity`, `unit`).                │
+ │     82 - - **`preparedStock`**: Current inventory of fully cooked/prepared items (`quantity`,     │
+ │        `returnedAt`).                                                                             │
+ │     83 - - **`spoilageLog`**: Logs spoilage events (`itemId`, `itemName`, `itemType`, `quantity`  │
+ │        , `stockManagerId`, `reportedAt`).                                                         │
+ │     84 -                                                                                          │
+ │     85 - #### Transactional Collections                                                           │
+ │     86 -                                                                                          │
+ │     87 - - **`forecasts`**: Weekly sales forecasts.                                               │
+ │     88 -     - **Fields:** `zonalHeadId`, `teamLeadId`, `forecastWeek` (`dd-mm-yyyy`), `items`    │
+ │        (array of `name`, `recipeId`, `dailyQuantities` for Mon-Sun, `quantity`), `status` (       │
+ │        `Draft`, `Pending Stock Manager Approval`, `Rejected by Stock Manager`, `Pending Finance   │
+ │        Approval`, `Accepted by Finance`, `Rejected by Finance`), `createdAt`.                     │
+ │     89 - - **`dailyTargets`**: Daily sales targets set by Zonal Heads.                            │
+ │     90 -     - **Fields:** `zonalHeadId`, `teamLeadId`, `date` (`dd-mm-yyyy`), `items` (array of  │
+ │        `recipeId`, `quantity`, `name`), `forecastId` (ID of the weekly forecast), `forecastWeek`  │
+ │        (start date of the forecast week).                                                         │
+ │     91 - - **`procurementRequests`**: Requests for procuring ingredients.                         │
+ │     92 - - **`cookingAssignments`**: Daily cooking tasks.                                         │
+ │     93 -     - **Fields:** `date` (`dd-mm-yyyy`), `kitchenId`, `kitchenName`, `kitchenManagerId`  │
+ │        , `items` (cooked items), `fromPreparedStock` (items from prepared stock), `status` (      │
+ │        `Pending Dispersal`, `Dispersed`, `Ingredients Received`, `Pending Stock Manager           │
+ │        Collection`, `Ready for Logistics Collection`, `Collected by Logistics`, `Completed`),     │
+ │        `completedAt`, `forecastId`, `forecastWeek`.                                               │
+      94 - - **`distributions`**: Tracks cooked food distribution to sales teams.                   │
+      95 - - **`logisticsInventory`**: Inventory of the logistics team (`quantity`, `unit`).        │
+      96 -                           
 
 ## Getting Started
 
@@ -271,5 +184,3 @@ Builds the app for production to the `build` folder.
 You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
 
 To learn React, check out the [React documentation](https://reactjs.org/).
-#   b b - s u p p l y - c h a i n - m a n a g e m e n t  
- 

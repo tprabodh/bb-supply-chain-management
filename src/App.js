@@ -35,6 +35,9 @@ import LogisticsManagerInput from './pages/roles/LogisticsManagerInput';
 import OrganizationChart from './pages/OrganizationChart';
 import RecipeManagement from './pages/roles/RecipeManagement';
 import KitchenAssignment from './pages/roles/KitchenAssignment';
+import IngredientManagement from './pages/roles/IngredientManagement';
+import BusinessDetails from './pages/roles/BusinessDetails';
+import BulkBuyOrder from './pages/roles/BulkBuyOrder';
 
 function App() {
   return (
@@ -45,6 +48,8 @@ function App() {
         <Route path="/admin/create-profile" element={<ProtectedRoute roles={['Admin']}><AdminProfile /></ProtectedRoute>} />
         <Route path="/admin/recipe-management" element={<ProtectedRoute roles={['Admin']}><RecipeManagement /></ProtectedRoute>} />
         <Route path="/admin/kitchen-assignment" element={<ProtectedRoute roles={['Admin']}><KitchenAssignment /></ProtectedRoute>} />
+        <Route path="/admin/ingredient-management" element={<ProtectedRoute roles={['Admin']}><IngredientManagement /></ProtectedRoute>} />
+        <Route path="/admin/business-details" element={<ProtectedRoute roles={['Admin']}><BusinessDetails /></ProtectedRoute>} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
 
         {/* Admin Routes */}
@@ -65,6 +70,7 @@ function App() {
         {/* City operations Head Routes */}
         <Route path="/CityoperationsHead/dashboard" element={<ProtectedRoute roles={['City operations Head']}><CityOperationsHeadDashboard /></ProtectedRoute>} />
         <Route path="/CityoperationsHead/input" element={<ProtectedRoute roles={['City operations Head']}><CityOperationsHeadInput /></ProtectedRoute>} />
+        <Route path="/city-operations-head/bulk-buy-order" element={<ProtectedRoute roles={['City operations Head']}><BulkBuyOrder /></ProtectedRoute>} />
 
         {/* Zonal Head Routes */}
         <Route path="/ZonalHead/dashboard" element={<ProtectedRoute roles={['Zonal Head']}><ZonalHeadDashboard /></ProtectedRoute>} />

@@ -24,18 +24,18 @@ const ForecastDetailsModal = ({ forecast, onClose, onApprove, zonalHeadProfile }
   };
 
   const handleApprove = () => {
-    onApprove(forecast.id, 'Approved', forecast.items);
-    toast.success('Forecast approved successfully!');
+    onApprove(forecast.id, 'Accepted by Finance', forecast.items);
+    toast.success('Forecast accepted successfully!');
   };
 
   const handleApproveWithModifications = () => {
-    onApprove(forecast.id, 'Approved', editableItems);
-    toast.success('Forecast approved with modifications!');
+    onApprove(forecast.id, 'Accepted by Finance', editableItems);
+    toast.success('Forecast accepted with modifications!');
   };
 
   const handleReject = () => {
-    onApprove(forecast.id, 'Rejected', forecast.items);
-    toast.info('Forecast rejected.');
+    onApprove(forecast.id, 'Rejected by Finance', forecast.items);
+    toast.info('Forecast rejected by Finance.');
   };
 
   return (
@@ -51,7 +51,7 @@ const ForecastDetailsModal = ({ forecast, onClose, onApprove, zonalHeadProfile }
         <div className="space-y-4 text-gray-700">
             <p><span className="font-semibold">Zonal Head:</span> {zonalHeadProfile?.subrole || forecast.zonalHeadId}</p>
             <p><span className="font-semibold">Team Lead:</span> {teamLeadProfile?.subrole || forecast.teamLeadId}</p>
-            <p><span className="font-semibold">Submitted:</span> {new Date(forecast.createdAt.seconds * 1000).toLocaleDateString()}</p>
+            <p><span className="font-semibold">Submitted:</span> {forecast.createdAt ? new Date(forecast.createdAt.seconds * 1000).toLocaleDateString() : 'N/A'}</p>
             
             <div className="mt-6">
                 <h4 className="text-lg sm:text-xl font-semibold text-gray-800 mb-3">Forecasted Items</h4>

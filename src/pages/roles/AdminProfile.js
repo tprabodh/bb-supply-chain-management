@@ -32,6 +32,11 @@ const AdminProfile = () => {
     password: '',
     reportsTo: '',
     empCode: '',
+    salary: '',
+    // Sales Executive specific fields
+    businessName: 'Yasaswy Universal',
+    fssaiCode: '123412341234',
+    gstin: '123412341234',
   });
   const [profiles, setProfiles] = useState([]);
   const [allowedManagers, setAllowedManagers] = useState([]);
@@ -76,8 +81,24 @@ const AdminProfile = () => {
       const querySnapshot = await getDocs(q);
       const subrole = `${formData.role}-${querySnapshot.docs.length + 1}`;
       const empCode = generateEmpCode(profiles, formData.role, formData.reportsTo);
+      
+      let vendorData = null;
+      if (formData.role === 'Sales Executive') {
+        vendorData = {
+          name: formData.name,
+          phoneNumber: formData.phoneNumber,
+          businessName: formData.businessName,
+          aadharCardNumber: formData.aadharNumber,
+          email: formData.email,
+          businessAddress: formData.address,
+          fssaiCode: formData.fssaiCode,
+          gstin: formData.gstin,
+        };
+      }
+
       const { password, ...profileData } = formData;
-      await createProfile({ ...profileData, subrole, empCode, password });
+      await createProfile({ ...profileData, subrole, empCode, password, vendorData, salary: parseFloat(formData.salary) });
+      
       setFormData({
         name: '',
         address: '',
@@ -88,6 +109,10 @@ const AdminProfile = () => {
         password: '',
         reportsTo: '',
         empCode: '',
+        salary: '',
+        businessName: 'Yasaswy Universal',
+        fssaiCode: '123412341234',
+        gstin: '123412341234',
       });
       toast.success('Profile created successfully!');
     } catch (error) {
@@ -150,7 +175,28 @@ const AdminProfile = () => {
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
               <input id="password" name="password" type="password" value={formData.password} onChange={handleChange} required className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-150 ease-in-out" />
             </div>
+            <div>
+              <label htmlFor="salary" className="block text-sm font-medium text-gray-700 mb-1">Salary</label>
+              <input id="salary" name="salary" type="number" value={formData.salary} onChange={handleChange} required className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-150 ease-in-out" />
+            </div>
           </div>
+
+          {formData.role === 'Sales Executive' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
+              <div>
+                <label htmlFor="businessName" className="block text-sm font-medium text-gray-700 mb-1">Business Name</label>
+                <input id="businessName" name="businessName" type="text" value={formData.businessName} onChange={handleChange} className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-150 ease-in-out" />
+              </div>
+              <div>
+                <label htmlFor="fssaiCode" className="block text-sm font-medium text-gray-700 mb-1">FSSAI Code</label>
+                <input id="fssaiCode" name="fssaiCode" type="text" value={formData.fssaiCode} onChange={handleChange} className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-150 ease-in-out" />
+              </div>
+              <div>
+                <label htmlFor="gstin" className="block text-sm font-medium text-gray-700 mb-1">GSTIN</label>
+                <input id="gstin" name="gstin" type="text" value={formData.gstin} onChange={handleChange} className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-150 ease-in-out" />
+              </div>
+            </div>
+          )}
           <button type="submit" disabled={loading} className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-lg font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out transform hover:-translate-y-0.5">
             {loading ? 'Creating...' : 'Create Profile'}
           </button>

@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import CityOperationsHeadSalesData from '../../components/CityOperationsHeadSalesData';
 import KitchenManagerMetrics from '../../components/KitchenManagerMetrics';
 import BusinessInsights from '../../components/BusinessInsights';
@@ -124,6 +125,15 @@ const CityOperationsHeadDashboard = () => {
                   </li>
                 )}
               />
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+              <h3 className="text-xl font-bold text-gray-800 mb-4">Quick Actions</h3>
+              <div className="flex flex-wrap gap-4">
+                <Link to="/city-operations-head/bulk-buy-order" className="px-6 py-3 font-semibold text-white bg-[#f56703] rounded-lg shadow-md hover:bg-[#d95702] transform hover:-translate-y-0.5 transition-all duration-300">
+                  Create Bulk Buy Order
+                </Link>
+              </div>
             </div>
 
             <TotalDailyInsights insights={insights} kitchenInsights={kitchenInsights} />

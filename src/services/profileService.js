@@ -1,32 +1,47 @@
 import { db, auth } from '../firebase';
-import { collection, setDoc, getDocs, query, where, doc, updateDoc, getDoc, onSnapshot, addDoc } from 'firebase/firestore';
+import { collection, setDoc, getDocs, query, where, doc, updateDoc, getDoc, onSnapshot, addDoc, writeBatch, Timestamp } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { v4 as uuidv4 } from 'uuid';
 
 export const createProfile = async (profileData) => {
   try {
-    const { email, password, empCode, ...restOfProfileData } = profileData;
-
-    if (restOfProfileData.role === 'Sales Executive') {
-      const q = query(collection(db, 'profiles'), where('subrole', '==', 'Team Lead-1'));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        const teamLeadId = querySnapshot.docs[0].id;
-        restOfProfileData.reportsTo = teamLeadId;
-      } else {
-        console.warn('Team Lead-1 not found. Sales Executive will not be automatically assigned.');
-      }
-    }
+    const { email, password, empCode, vendorData, ...restOfProfileData } = profileData;
 
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const uid = userCredential.user.uid;
-    
-    const profileRef = doc(db, 'profiles', uid);
-    await setDoc(profileRef, { ...restOfProfileData, email, uid, empCode });
 
-    console.log('Document written with ID: ', uid);
+    const batch = writeBatch(db);
+
+    // 1. Create the profile document
+    const profileRef = doc(db, 'profiles', uid);
+    batch.set(profileRef, { ...restOfProfileData, email, uid, empCode });
+
+    // 2. If it's a Sales Executive, create the vendor document
+    if (restOfProfileData.role === 'Sales Executive' && vendorData) {
+      const recipesSnapshot = await getDocs(collection(db, 'recipes'));
+      const menuItems = recipesSnapshot.docs.map(doc => ({
+        ...doc.data(),
+        stock: 0,
+        date: Timestamp.now(),
+      }));
+
+      const vendorRef = doc(db, 'vendors', uid);
+      batch.set(vendorRef, {
+        ...vendorData,
+        uid,
+        empCode, // Add empCode here
+        uniqueId: Math.floor(100000 + Math.random() * 900000).toString(),
+        managerId: null,
+        menu: menuItems,
+      });
+    }
+
+    await batch.commit();
+
+    console.log('Document(s) written with ID: ', uid);
     return uid;
   } catch (e) {
-    console.error('Error adding document: ', e);
+    console.error('Error adding document(s): ', e);
     throw e;
   }
 };
@@ -115,91 +130,7 @@ export const updateProfile = async (id, updatedData) => {
   }
 };
 
-export const syncVendorsToSalesExecutives = async () => {
-  try {
-    const teamLeadsQuery = query(collection(db, 'profiles'), where('role', '==', 'Team Lead'));
-    const teamLeadsSnapshot = await getDocs(teamLeadsQuery);
 
-    if (teamLeadsSnapshot.empty) {
-      console.warn('No Team Leads found. Sales Executives cannot be assigned.');
-      return;
-    }
-
-    const teamLeads = teamLeadsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    // Sort Team Leads by the numerical part of their subrole
-    teamLeads.sort((a, b) => {
-      const numA = parseInt(a.subrole.split('-').pop());
-      const numB = parseInt(b.subrole.split('-').pop());
-      return numA - numB;
-    });
-
-    let currentTeamLeadIndex = 0;
-    let salesExecutivesAssignedToCurrentTL = 0;
-
-    const vendorsCollectionRef = collection(db, 'vendors');
-    const vendorsSnapshot = await getDocs(vendorsCollectionRef);
-
-    for (const vendorDoc of vendorsSnapshot.docs) {
-      const vendorData = vendorDoc.data();
-      const vendorEmail = vendorData.email; 
-
-      const qProfile = query(collection(db, 'profiles'), where('email', '==', vendorEmail));
-      const profileSnapshot = await getDocs(qProfile);
-
-      // Find the next available Team Lead
-      while (currentTeamLeadIndex < teamLeads.length) {
-        const teamLeadId = teamLeads[currentTeamLeadIndex].id;
-        const salesExecutivesUnderThisTLQuery = query(collection(db, 'profiles'), where('reportsTo', '==', teamLeadId), where('role', '==', 'Sales Executive'));
-        const salesExecutivesUnderThisTLSnapshot = await getDocs(salesExecutivesUnderThisTLQuery);
-        salesExecutivesAssignedToCurrentTL = salesExecutivesUnderThisTLSnapshot.docs.length;
-
-        if (salesExecutivesAssignedToCurrentTL < 25) {
-          break; // Found an available Team Lead
-        } else {
-          currentTeamLeadIndex++; // Move to the next Team Lead
-        }
-      }
-
-      if (currentTeamLeadIndex >= teamLeads.length) {
-        console.warn('All Team Leads are full. Cannot assign more Sales Executives.');
-        break; // No available Team Leads
-      }
-
-      const assignedTeamLeadId = teamLeads[currentTeamLeadIndex].id;
-
-      if (profileSnapshot.empty) {
-        // Create new profile
-        const salesExecutivesQuery = query(collection(db, 'profiles'), where('role', '==', 'Sales Executive'));
-        const salesExecutivesSnapshot = await getDocs(salesExecutivesQuery);
-        const nextSalesExecutiveNumber = salesExecutivesSnapshot.docs.length + 1;
-
-        const newProfileData = {
-          name: vendorData.name || 'N/A',
-          email: vendorData.email,
-          phoneNumber: vendorData.phoneNumber || 'N/A',
-          address: vendorData.businessAddress || 'N/A',
-          aadharNumber: vendorData.aadharCardNumber || 'N/A',
-          role: 'Sales Executive',
-          subrole: `Sales Executive-${nextSalesExecutiveNumber}`, 
-          reportsTo: assignedTeamLeadId,
-          // No password or Firebase Auth user creation for these profiles
-        };
-        // Directly add to profiles collection without Firebase Auth user creation
-        await addDoc(collection(db, 'profiles'), newProfileData);
-        console.log(`Created new Sales Executive profile for ${vendorEmail} under ${teamLeads[currentTeamLeadIndex].subrole}`);
-      } else {
-        const existingProfile = profileSnapshot.docs[0];
-        await updateProfile(existingProfile.id, { reportsTo: assignedTeamLeadId });
-        console.log(`Updated existing Sales Executive profile for ${vendorEmail} under ${teamLeads[currentTeamLeadIndex].subrole}`);
-      }
-      salesExecutivesAssignedToCurrentTL++; // Increment count for the current Team Lead
-    }
-    console.log('Vendor migration to Sales Executives complete.');
-  } catch (e) {
-    console.error('Error migrating vendors: ', e);
-    throw e;
-  }
-};
 
 export const getSubordinates = (managerId, allProfiles) => {
   const subordinates = [];

@@ -95,7 +95,7 @@ export const subscribeToCompletedAssignments = (callback) => {
 export const updateCookedQuantities = async (assignmentId, items) => {
     try {
         const assignmentRef = doc(db, 'cookingAssignments', assignmentId);
-        await updateDoc(assignmentRef, { items, status: 'Completed', completedAt: new Date() });
+        await updateDoc(assignmentRef, { items, status: 'Pending Stock Manager Collection', completedAt: new Date() });
     } catch (error) {
         console.error('Error updating cooked quantities:', error);
         throw error;

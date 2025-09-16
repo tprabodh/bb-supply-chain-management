@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createRecipe, subscribeToRecipes, updateRecipe, deleteRecipe } from '../../services/recipeService';
+import { subscribeToIngredients } from '../../services/ingredientService';
 import { syncVendorsWithRecipe } from '../../services/vendorSyncService';
 
 const RecipeManagement = () => {
@@ -10,12 +11,17 @@ const RecipeManagement = () => {
   const [newMrp, setNewMrp] = useState('');
   const [newSellingPrice, setNewSellingPrice] = useState('');
   const [newDescription, setNewDescription] = useState('');
+  const [newImageUrl, setNewImageUrl] = useState('');
+  const [newIncentives, setNewIncentives] = useState([{ percentage: '', from: '', to: '' }]);
+  const [newIsJar, setNewIsJar] = useState(false);
+  const [newIsPickle, setNewIsPickle] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [masterIngredients, setMasterIngredients] = useState([]);
 
   useEffect(() => {
-    const unsubscribe = subscribeToRecipes((fetchedRecipes) => {
+    const unsubscribeRecipes = subscribeToRecipes((fetchedRecipes) => {
       setRecipes(fetchedRecipes);
       setLoading(false);
     }, (err) => {
@@ -24,7 +30,16 @@ const RecipeManagement = () => {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    const unsubscribeIngredients = subscribeToIngredients((fetchedIngredients) => {
+      setMasterIngredients(fetchedIngredients);
+    }, (err) => {
+      console.error('Error subscribing to ingredients:', err);
+    });
+
+    return () => {
+      unsubscribeRecipes();
+      unsubscribeIngredients();
+    };
   }, []);
 
   const handleAddIngredient = () => {
@@ -37,10 +52,47 @@ const RecipeManagement = () => {
   };
 
   const handleIngredientChange = (index, field, value) => {
-    const updatedIngredients = newIngredients.map((ingredient, i) =>
-      i === index ? { ...ingredient, [field]: value } : ingredient
-    );
+    const updatedIngredients = [...newIngredients];
+    const currentIngredient = { ...updatedIngredients[index], [field]: value };
+
+    if (field === 'name') {
+      const selectedIngredient = masterIngredients.find(i => i.name === value);
+      if (selectedIngredient) {
+        currentIngredient.unit = selectedIngredient.unit;
+        // If quantity is already set, calculate cost
+        if (currentIngredient.quantity) {
+          const quantity = parseFloat(currentIngredient.quantity);
+          const costPerUnit = parseFloat(selectedIngredient.costPerUnit);
+          currentIngredient.cost = quantity * costPerUnit;
+        }
+      }
+    } else if (field === 'quantity') {
+      const selectedIngredient = masterIngredients.find(i => i.name === currentIngredient.name);
+      if (selectedIngredient) {
+        const quantity = parseFloat(value);
+        const costPerUnit = parseFloat(selectedIngredient.costPerUnit);
+        currentIngredient.cost = quantity * costPerUnit;
+      }
+    }
+
+    updatedIngredients[index] = currentIngredient;
     setNewIngredients(updatedIngredients);
+  };
+
+  const handleIncentiveChange = (index, field, value) => {
+    const updatedIncentives = newIncentives.map((incentive, i) =>
+      i === index ? { ...incentive, [field]: value } : incentive
+    );
+    setNewIncentives(updatedIncentives);
+  };
+
+  const handleAddIncentive = () => {
+    setNewIncentives([...newIncentives, { percentage: '', from: '', to: '' }]);
+  };
+
+  const handleRemoveIncentive = (index) => {
+    const updatedIncentives = newIncentives.filter((_, i) => i !== index);
+    setNewIncentives(updatedIncentives);
   };
 
   const handleCreateRecipe = async (e) => {
@@ -53,6 +105,14 @@ const RecipeManagement = () => {
         mrp: parseFloat(newMrp),
         sellingPrice: parseFloat(newSellingPrice),
         description: newDescription,
+        imageUrl: newImageUrl,
+        isJar: newIsJar,
+        isPickle: newIsPickle,
+        incentives: newIncentives.map(inc => ({
+          percentage: parseFloat(inc.percentage) || 0,
+          from: parseInt(inc.from, 10) || 0,
+          to: parseInt(inc.to, 10) || 0,
+        })),
         ingredients: newIngredients.map(ing => ({ ...ing, quantity: parseFloat(ing.quantity) }))
       };
       await createRecipe(recipeData);
@@ -62,6 +122,10 @@ const RecipeManagement = () => {
       setNewMrp('');
       setNewSellingPrice('');
       setNewDescription('');
+      setNewImageUrl('');
+      setNewIncentives([{ percentage: '', from: '', to: '' }]);
+      setNewIsJar(false);
+      setNewIsPickle(false);
     } catch (err) {
       setError('Failed to create recipe.');
       console.error('Error creating recipe:', err);
@@ -84,6 +148,14 @@ const RecipeManagement = () => {
         mrp: parseFloat(editingRecipe.mrp),
         sellingPrice: parseFloat(editingRecipe.sellingPrice),
         description: editingRecipe.description,
+        imageUrl: editingRecipe.imageUrl || '',
+        isJar: editingRecipe.isJar || false,
+        isPickle: editingRecipe.isPickle || false,
+        incentives: (editingRecipe.incentives || []).map(inc => ({
+          percentage: parseFloat(inc.percentage) || 0,
+          from: parseInt(inc.from, 10) || 0,
+          to: parseInt(inc.to, 10) || 0,
+        })),
         ingredients: editingRecipe.ingredients.map(ing => ({ ...ing, quantity: parseFloat(ing.quantity) }))
       };
       await updateRecipe(editingRecipe.id, updatedRecipeData);
@@ -133,8 +205,32 @@ const RecipeManagement = () => {
     setEditingRecipe({ ...editingRecipe, ingredients: updatedIngredients });
   };
 
+  const handleEditingIncentiveChange = (index, field, value) => {
+    const updatedIncentives = editingRecipe.incentives.map((incentive, i) =>
+      i === index ? { ...incentive, [field]: value } : incentive
+    );
+    setEditingRecipe({ ...editingRecipe, incentives: updatedIncentives });
+  };
+
+  const handleAddEditingIncentive = () => {
+    setEditingRecipe({
+      ...editingRecipe,
+      incentives: [...(editingRecipe.incentives || []), { percentage: '', from: '', to: '' }],
+    });
+  };
+
+  const handleRemoveEditingIncentive = (index) => {
+    const updatedIncentives = editingRecipe.incentives.filter((_, i) => i !== index);
+    setEditingRecipe({ ...editingRecipe, incentives: updatedIncentives });
+  };
+
   return (
     <div className="container mx-auto p-4">
+      <datalist id="ingredients-list">
+        {masterIngredients.map((ingredient) => (
+          <option key={ingredient.id} value={ingredient.name} />
+        ))}
+      </datalist>
       <h1 className="text-2xl font-bold text-gray-900 mb-4">Recipe Management</h1>
 
       {error && <p className="text-red-500 mb-4">{error}</p>}
@@ -190,6 +286,92 @@ const RecipeManagement = () => {
             />
           </div>
 
+          <div>
+            <label htmlFor="newImageUrl" className="block text-sm font-medium text-gray-700">Image URL</label>
+            <input
+              type="text"
+              id="newImageUrl"
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+              value={newImageUrl}
+              onChange={(e) => setNewImageUrl(e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="newIsJar"
+                className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                checked={newIsJar}
+                onChange={(e) => setNewIsJar(e.target.checked)}
+              />
+              <label htmlFor="newIsJar" className="ml-2 block text-sm text-gray-900">Is Jar?</label>
+            </div>
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="newIsPickle"
+                className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                checked={newIsPickle}
+                onChange={(e) => setNewIsPickle(e.target.checked)}
+              />
+              <label htmlFor="newIsPickle" className="ml-2 block text-sm text-gray-900">Is Pickle?</label>
+            </div>
+          </div>
+
+          <h3 className="text-lg font-semibold text-gray-700">Incentives</h3>
+          {newIncentives.map((incentive, index) => (
+            <div key={index} className="flex space-x-2 items-end">
+              <div className="flex-1">
+                <label htmlFor={`incentive-percentage-${index}`} className="block text-sm font-medium text-gray-700">Percentage</label>
+                <input
+                  type="number"
+                  id={`incentive-percentage-${index}`}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                  value={incentive.percentage}
+                  onChange={(e) => handleIncentiveChange(index, 'percentage', e.target.value)}
+                />
+              </div>
+              <div className="flex-1">
+                <label htmlFor={`incentive-from-${index}`} className="block text-sm font-medium text-gray-700">From Units</label>
+                <input
+                  type="number"
+                  id={`incentive-from-${index}`}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                  value={incentive.from}
+                  onChange={(e) => handleIncentiveChange(index, 'from', e.target.value)}
+                />
+              </div>
+              <div className="flex-1">
+                <label htmlFor={`incentive-to-${index}`} className="block text-sm font-medium text-gray-700">To Units</label>
+                <input
+                  type="number"
+                  id={`incentive-to-${index}`}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                  value={incentive.to}
+                  onChange={(e) => handleIncentiveChange(index, 'to', e.target.value)}
+                />
+              </div>
+              {newIncentives.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => handleRemoveIncentive(index)}
+                  className="px-3 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={handleAddIncentive}
+            className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
+          >
+            Add Incentive Tier
+          </button>
+
           <h3 className="text-lg font-semibold text-gray-700">Ingredients</h3>
           {newIngredients.map((ingredient, index) => (
             <div key={index} className="flex space-x-2 items-end">
@@ -197,6 +379,7 @@ const RecipeManagement = () => {
                 <label htmlFor={`ingredient-name-${index}`} className="block text-sm font-medium text-gray-700">Name</label>
                 <input
                   type="text"
+                  list="ingredients-list"
                   id={`ingredient-name-${index}`}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
                   value={ingredient.name}
@@ -222,8 +405,17 @@ const RecipeManagement = () => {
                   id={`ingredient-unit-${index}`}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
                   value={ingredient.unit}
-                  onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
-                  required
+                  readOnly
+                />
+              </div>
+              <div className="flex-1">
+                <label htmlFor={`ingredient-cost-${index}`} className="block text-sm font-medium text-gray-700">Cost</label>
+                <input
+                  type="number"
+                  id={`ingredient-cost-${index}`}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                  value={ingredient.cost || ''}
+                  readOnly
                 />
               </div>
               {newIngredients.length > 1 && (
@@ -300,7 +492,8 @@ const RecipeManagement = () => {
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex justify-center items-center">
           <div className="bg-white p-8 rounded-lg shadow-xl max-w-lg w-full">
             <h2 className="text-xl font-bold text-gray-800 mb-4">Edit Recipe: {editingRecipe.name}</h2>
-            <form onSubmit={handleUpdateRecipe} className="space-y-4">
+            <div className="max-h-[70vh] overflow-y-auto pr-4">
+              <form onSubmit={handleUpdateRecipe} className="space-y-4">
               <div>
                 <label htmlFor="editRecipeName" className="block text-sm font-medium text-gray-700">Recipe Name</label>
                 <input
@@ -347,6 +540,92 @@ const RecipeManagement = () => {
                   required
                 />
               </div>
+
+              <div>
+                <label htmlFor="editImageUrl" className="block text-sm font-medium text-gray-700">Image URL</label>
+                <input
+                  type="text"
+                  id="editImageUrl"
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                  value={editingRecipe.imageUrl || ''}
+                  onChange={(e) => setEditingRecipe({ ...editingRecipe, imageUrl: e.target.value })}
+                />
+              </div>
+
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="editIsJar"
+                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                    checked={editingRecipe.isJar || false}
+                    onChange={(e) => setEditingRecipe({ ...editingRecipe, isJar: e.target.checked })}
+                  />
+                  <label htmlFor="editIsJar" className="ml-2 block text-sm text-gray-900">Is Jar?</label>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="editIsPickle"
+                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                    checked={editingRecipe.isPickle || false}
+                    onChange={(e) => setEditingRecipe({ ...editingRecipe, isPickle: e.target.checked })}
+                  />
+                  <label htmlFor="editIsPickle" className="ml-2 block text-sm text-gray-900">Is Pickle?</label>
+                </div>
+              </div>
+
+              <h3 className="text-lg font-semibold text-gray-700">Incentives</h3>
+              {(editingRecipe.incentives || []).map((incentive, index) => (
+                <div key={index} className="flex space-x-2 items-end mb-2">
+                  <div className="flex-1">
+                    <label htmlFor={`edit-incentive-percentage-${index}`} className="block text-sm font-medium text-gray-700">Percentage</label>
+                    <input
+                      type="number"
+                      id={`edit-incentive-percentage-${index}`}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                      value={incentive.percentage}
+                      onChange={(e) => handleEditingIncentiveChange(index, 'percentage', e.target.value)}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label htmlFor={`edit-incentive-from-${index}`} className="block text-sm font-medium text-gray-700">From Units</label>
+                    <input
+                      type="number"
+                      id={`edit-incentive-from-${index}`}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                      value={incentive.from}
+                      onChange={(e) => handleEditingIncentiveChange(index, 'from', e.target.value)}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label htmlFor={`edit-incentive-to-${index}`} className="block text-sm font-medium text-gray-700">To Units</label>
+                    <input
+                      type="number"
+                      id={`edit-incentive-to-${index}`}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                      value={incentive.to}
+                      onChange={(e) => handleEditingIncentiveChange(index, 'to', e.target.value)}
+                    />
+                  </div>
+                  {(editingRecipe.incentives.length > 1) && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveEditingIncentive(index)}
+                      className="px-3 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={handleAddEditingIncentive}
+                className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
+              >
+                Add Incentive Tier
+              </button>
 
               <h3 className="text-lg font-semibold text-gray-700">Ingredients</h3>
               {editingRecipe.ingredients.map((ingredient, index) => (
@@ -420,6 +699,7 @@ const RecipeManagement = () => {
                 </button>
               </div>
             </form>
+          </div>
           </div>
         </div>
       )}

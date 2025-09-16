@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { subscribeToUsersCount, subscribeToRolesCount, subscribeToKitchensCount, subscribeToPendingForecastsAdmin, subscribeToActiveProcurements, subscribeToOngoingKitchenAssignments } from '../../services/adminService';
-import { syncVendorsToSalesExecutives } from '../../services/profileService';
+
 import { toast } from 'react-toastify';
 
 const AdminDashboard = () => {
@@ -47,14 +47,7 @@ const AdminDashboard = () => {
     };
   }, []);
 
-  const handleSyncVendors = async () => {
-    try {
-      await syncVendorsToSalesExecutives();
-      toast.success('Vendor synchronization process initiated successfully!');
-    } catch (error) {
-      toast.error('Failed to start vendor synchronization.');
-    }
-  };
+  
 
   const StatCard = ({ title, value }) => (
     <div className="bg-white p-6 rounded-xl shadow-lg transform transition-all duration-300 hover:scale-105">
@@ -126,8 +119,10 @@ const AdminDashboard = () => {
             <Link to="/admin/create-profile" className="px-6 py-3 font-semibold text-white bg-[#f56703] rounded-lg shadow-md hover:bg-[#d95702] transform hover:-translate-y-0.5 transition-all duration-300">Create Profile</Link>
             <Link to="/organization-chart" className="px-6 py-3 font-semibold text-white bg-[#f56703] rounded-lg shadow-md hover:bg-[#d95702] transform hover:-translate-y-0.5 transition-all duration-300">View Organization Chart</Link>
             <Link to="/admin/recipe-management" className="px-6 py-3 font-semibold text-white bg-[#f56703] rounded-lg shadow-md hover:bg-[#d95702] transform hover:-translate-y-0.5 transition-all duration-300">Recipe Management</Link>
-            <Link to="/admin/kitchen-assignment" className="px-6 py-3 font-semibold text-white bg-[#f56703] rounded-lg shadow-md hover:bg-[#d95702] transform hover:-translate-y-0.5 transition-all duration-300">Kitchen Assignment</Link>
-            <button onClick={handleSyncVendors} className="px-6 py-3 font-semibold text-white bg-green-600 rounded-lg shadow-md hover:bg-green-700 transform hover:-translate-y-0.5 transition-all duration-300">Sync Vendors</button>
+            
+            <Link to="/admin/ingredient-management" className="px-6 py-3 font-semibold text-white bg-[#f56703] rounded-lg shadow-md hover:bg-[#d95702] transform hover:-translate-y-0.5 transition-all duration-300">Ingredient Management</Link>
+            <Link to="/admin/business-details" className="px-6 py-3 font-semibold text-white bg-[#f56703] rounded-lg shadow-md hover:bg-[#d95702] transform hover:-translate-y-0.5 transition-all duration-300">Business Details</Link>
+            
           </div>
         </div>
       </div>

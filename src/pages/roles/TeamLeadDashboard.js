@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { subscribeToDistributionsByTeamLead, updateDistributionStatus } from '../../services/logisticsService';
 import { getStockBackDataForTeamLead } from '../../services/stockBackService';
 import { getProfilesByIds } from '../../services/profileService';
+import { subscribeToTeamLeadForecasts } from '../../services/forecastService';
 import Loader from '../../components/Loader';
 import SalesData from '../../components/SalesData';
 import StockBackRequests from '../../components/StockBackRequests';
@@ -17,6 +18,8 @@ const TeamLeadDashboard = () => {
   const [stockBackData, setStockBackData] = useState([]);
   const [processedStockBack, setProcessedStockBack] = useState(false);
   const [logisticsManagerProfiles, setLogisticsManagerProfiles] = useState({});
+  const [teamForecasts, setTeamForecasts] = useState([]);
+  const [salesExecutiveProfiles, setSalesExecutiveProfiles] = useState({});
   const [loading, setLoading] = useState(true);
 
   const fetchStockBackData = async () => {
@@ -65,10 +68,21 @@ const TeamLeadDashboard = () => {
       setLoading(false);
     });
 
+    const unsubscribeForecasts = subscribeToTeamLeadForecasts(user.id, async (forecasts) => {
+      setTeamForecasts(forecasts);
+      const salesExecutiveIds = [...new Set(forecasts.map(f => f.salesExecutiveId))];
+      if (salesExecutiveIds.length > 0) {
+        const profiles = await getProfilesByIds(salesExecutiveIds);
+        const profilesMap = profiles.reduce((map, profile) => ({ ...map, [profile.id]: profile }), {});
+        setSalesExecutiveProfiles(profilesMap);
+      }
+    });
+
     fetchStockBackData();
 
     return () => {
       unsubscribeDistributions();
+      unsubscribeForecasts();
     };
   }, [user]);
 
@@ -92,6 +106,40 @@ const TeamLeadDashboard = () => {
         {loading && <div className="flex justify-center items-center h-64"><Loader /></div>}
         {!loading && (
           <div className="space-y-8">
+            <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg">
+              <h3 className="text-2xl font-bold text-gray-800 mb-6">Team Forecasts</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sales Executive</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Weekly Forecast</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {teamForecasts.map(forecast => (
+                      <React.Fragment key={forecast.id}>
+                        {forecast.items.map((item, index) => (
+                          <tr key={`${forecast.id}-${item.recipeId}`} className="hover:bg-gray-50">
+                            {index === 0 && (
+                              <td rowSpan={forecast.items.length} className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{salesExecutiveProfiles[forecast.salesExecutiveId]?.name || forecast.salesExecutiveId}</td>
+                            )}
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.quantity}</td>
+                            {index === 0 && (
+                              <td rowSpan={forecast.items.length} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{forecast.status}</td>
+                            )}
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg">
                 <h3 className="text-2xl font-bold text-gray-800 mb-6">Incoming Deliveries</h3>
                 <div className="overflow-x-auto">
