@@ -99,7 +99,7 @@ This project is a comprehensive Supply Chain Management application built with R
 - **Logistics Manager (LM) Dashboard Enhancements:**
   - **Cooked Food Collection Workflow:** LMs now collect cooked food with status `Ready for Logistics Collection` (from the Stock Manager), integrating into the new cooked food handling workflow.
 
- - #### Logistics Manager (LM)                                                              │
+   - #### Logistics Manager (LM)                                                              │
  │     66 - - **Cooked Food Collection:** **(UPDATED)** LM now collects cooked food with status      │
  │        `Ready for Logistics Collection` (from Stock Manager).                                     │
  │     67 - - **Distribution:** Distributes food to Team Leads based on daily targets.               │
@@ -149,9 +149,9 @@ This project is a comprehensive Supply Chain Management application built with R
  │        `Pending Dispersal`, `Dispersed`, `Ingredients Received`, `Pending Stock Manager           │
  │        Collection`, `Ready for Logistics Collection`, `Collected by Logistics`, `Completed`),     │
  │        `completedAt`, `forecastId`, `forecastWeek`.                                               │
-      94 - - **`distributions`**: Tracks cooked food distribution to sales teams.                   │
-      95 - - **`logisticsInventory`**: Inventory of the logistics team (`quantity`, `unit`).        │
-      96 -                           
+ │     94 - - **`distributions`**: Tracks cooked food distribution to sales teams.                   │
+ │     95 - - **`logisticsInventory`**: Inventory of the logistics team (`quantity`, `unit`).        │
+ │     96 -                           
 
 ## Getting Started
 
@@ -176,7 +176,7 @@ Launches the test runner in the interactive watch mode.
 ### `npm run build`
 Builds the app for production to the `build` folder.
 
-### `npm run eject`
+### `npm eject`
 **Note: this is a one-way operation. Once you `eject`, you can't go back!**
 
 ## Learn More

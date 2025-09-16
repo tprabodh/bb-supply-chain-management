@@ -157,7 +157,7 @@ const ZonalHeadDashboard = () => {
                                   {teamLeadData.forecasts.map(forecast => (
                                     <React.Fragment key={forecast.id}>
                                       {forecast.items.map((item, index) => (
-                                        <tr key={`${forecast.id}-${item.recipeId}">
+                                        <tr key={`${forecast.id}-${item.recipeId}`}>
                                           {index === 0 && <td rowSpan={forecast.items.length} className="px-4 py-2 whitespace-nowrap">{salesExecutiveProfiles[forecast.salesExecutiveId]?.name}</td>}
                                           <td className="px-4 py-2 whitespace-nowrap">{item.name}</td>
                                           <td className="px-4 py-2 whitespace-nowrap">{item.quantity}</td>
