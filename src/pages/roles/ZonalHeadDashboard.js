@@ -10,7 +10,6 @@ import { formatDate } from '../../utils/dateUtils';
 import DailyTargetInput from '../../components/DailyTargetInput';
 import ForecastVsActuals from '../../components/ForecastVsActuals';
 import { toast } from 'react-toastify';
-import ZonalHeadDailyGoalsInput from '../../components/ZonalHeadDailyGoalsInput';
 
 const ZonalHeadDashboard = () => {
   const { user } = useAuth();
@@ -21,14 +20,6 @@ const ZonalHeadDashboard = () => {
   const [error, setError] = useState(null);
   const [recipes, setRecipes] = useState([]);
   const [expandedTeamLead, setExpandedTeamLead] = useState(null);
-  const formattedCurrentDate = formatDate(new Date());
-
-  const getWeekStartDate = () => {
-    const today = new Date();
-    const day = today.getDay();
-    const diff = today.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
-    return new Date(today.setDate(diff));
-  };
 
   useEffect(() => {
     if (!user) {
@@ -107,27 +98,6 @@ const ZonalHeadDashboard = () => {
     return acc;
   }, {});
 
-  const currentDay = new Date().toLocaleString('en-US', { weekday: 'long' }); // e.g., "Monday"
-
-  const aggregatedSEForecasts = forecasts.reduce((acc, forecast) => {
-    if (!acc[forecast.teamLeadId]) {
-      acc[forecast.teamLeadId] = {};
-    }
-    forecast.items.forEach(item => {
-      if (!acc[forecast.teamLeadId][item.recipeId]) {
-        acc[forecast.teamLeadId][item.recipeId] = 0;
-      }
-      // Sum only the quantity for the current day
-      acc[forecast.teamLeadId][item.recipeId] += (item.dailyQuantities?.[currentDay] || 0);
-    });
-    return acc;
-  }, {});
-
-  const currentWeekStartDate = getWeekStartDate().toISOString().split('T')[0];
-  const currentWeekForecast = forecasts.find(f => f.forecastWeek === currentWeekStartDate);
-  const currentForecastId = currentWeekForecast?.id || null;
-  const currentForecastWeek = currentWeekForecast?.forecastWeek || null;
-
   const toggleTeamLeadExpansion = (teamLeadId) => {
     if (expandedTeamLead === teamLeadId) {
       setExpandedTeamLead(null);
@@ -187,7 +157,7 @@ const ZonalHeadDashboard = () => {
                                   {teamLeadData.forecasts.map(forecast => (
                                     <React.Fragment key={forecast.id}>
                                       {forecast.items.map((item, index) => (
-                                        <tr key={`${forecast.id}-${item.recipeId}`}>
+                                        <tr key={`${forecast.id}-${item.recipeId}">
                                           {index === 0 && <td rowSpan={forecast.items.length} className="px-4 py-2 whitespace-nowrap">{salesExecutiveProfiles[forecast.salesExecutiveId]?.name}</td>}
                                           <td className="px-4 py-2 whitespace-nowrap">{item.name}</td>
                                           <td className="px-4 py-2 whitespace-nowrap">{item.quantity}</td>
@@ -206,14 +176,7 @@ const ZonalHeadDashboard = () => {
                 </table>
               </div>
             </div>
-            <ZonalHeadDailyGoalsInput
-              teamLeads={Object.values(teamLeadProfiles)}
-              recipes={recipes}
-              aggregatedSEForecasts={aggregatedSEForecasts}
-              currentDate={formattedCurrentDate}
-              forecastId={currentForecastId}
-              forecastWeek={currentForecastWeek}
-            />
+                                      
             <ZonalHeadSalesData />
           </>
         )}
